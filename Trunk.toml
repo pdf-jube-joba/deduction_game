@@ -1,0 +1,5 @@
+[build]
+filehash = false
+minify = "never"
+offline = false
+inject_scripts = true

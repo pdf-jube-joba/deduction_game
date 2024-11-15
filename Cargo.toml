@@ -1,0 +1,12 @@
+[package]
+name = "game"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+either = "1.13.0"
+gloo = "0.11.0"
+itertools = "0.13.0"
+proconio = "0.5.0"
+rand = "0.8.5"
+yew = { version = "0.21.0", features = ["csr"] }
