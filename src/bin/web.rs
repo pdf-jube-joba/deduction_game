@@ -1,4 +1,4 @@
-use game::{defs::*, abstract_game::Player};
+use game::{abstract_game::Player, defs::*};
 use rand::thread_rng;
 use yew::prelude::*;
 
@@ -20,17 +20,18 @@ fn card_view(CardViewProps { config, card }: &CardViewProps) -> Html {
 }
 
 struct MoveView {
-    declare: Vec<bool>,
+    declare: Vec<Vec<bool>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct MoveProps {
-    all_sorts: Vec<Sort>,
+    as_player: Player,
+    config: GameConfig,
     callback: Callback<Move>,
 }
 
 enum MoveMsg {
-    Toggle(usize),
+    Toggle(usize, usize),
 }
 
 impl Component for MoveView {
@@ -38,80 +39,89 @@ impl Component for MoveView {
     type Properties = MoveProps;
     fn create(ctx: &Context<Self>) -> Self {
         let MoveProps {
-            all_sorts,
+            as_player: _,
+            config,
             callback: _,
         } = ctx.props();
         Self {
-            declare: vec![false; all_sorts.len()],
+            declare: vec![vec![false; config.all_sort().len()]; config.head_num() - 1],
         }
     }
     fn view(&self, ctx: &Context<Self>) -> Html {
         let MoveProps {
-            all_sorts,
+            as_player,
+            config,
             callback,
         } = ctx.props().clone();
-        let mut player1_query_htmls = vec![];
-        for s in &all_sorts {
-            let snew = s.clone();
-            let callback = callback.clone();
-            let onclick = Callback::from(move |_: MouseEvent| {
-                callback.emit(Move::Query {
-                    query_to: 1,
-                    query_sort: snew.clone(),
-                })
-            });
-            let html = html! {
-                <button class="button" onclick={onclick}> {s.to_string()} </button>
+        let mut other_player_htmls = vec![];
+        for i in 0..config.player_num() {
+            if i != as_player {
+                let mut htmls = vec![html! {format!("query to {i}")}];
+                for s in config.all_sort() {
+                    let snew = s.clone();
+                    let callback = callback.clone();
+                    let onclick = Callback::from(move |_: MouseEvent| {
+                        callback.emit(Move::Query {
+                            query_to: i,
+                            query_sort: snew.clone(),
+                        })
+                    });
+                    htmls.push(html! {
+                        <button class="button" onclick={onclick}> {s.to_string()} </button>
+                    });
+                }
+                htmls.push(html! {<br/>});
+                other_player_htmls.push(htmls);
             };
-            player1_query_htmls.push(html);
         }
 
-        let mut player2_query_htmls = vec![];
-        for s in &all_sorts {
-            let snew = s.clone();
-            let callback = callback.clone();
-            let onclick = Callback::from(move |_: MouseEvent| {
-                callback.emit(Move::Query {
-                    query_to: 2,
-                    query_sort: snew.clone(),
-                })
-            });
-            let html = html! {
-                <button class="button" onclick={onclick}> {s.to_string()} </button>
-            };
-            player2_query_htmls.push(html);
+        let mut deduction_html = vec![];
+        for i in 0..config.player_num() {
+            if i != as_player {
+                let mut htmls = vec![];
+                for (j, s) in config.all_sort().into_iter().enumerate() {
+                    let snew = s.clone();
+                    let callback = ctx
+                        .link()
+                        .callback(move |_: MouseEvent| MoveMsg::Toggle(i, j));
+                    htmls.push(html! {
+                        <button onclick={callback}> {format!("{snew}: {}", if self.declare[i][j] {"t"} else {"f"})} </button>
+                    });
+                }
+                htmls.push(html! {<br/>});
+                deduction_html.push(htmls);
+            }
         }
 
-        let mut declare_html = vec![];
-        for (i, s) in all_sorts.iter().enumerate() {
-            let snew = s.clone();
-            let callback = ctx.link().callback(move |_: MouseEvent| MoveMsg::Toggle(i));
-            let h = html! {
-                <button onclick={callback}> {format!("{snew}: {}", if self.declare[i] {"t"} else {"f"})} </button>
-            };
-            declare_html.push(h);
-        }
-
-        let declare: Vec<_> = all_sorts
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (s.clone(), self.declare[i]))
-            .collect();
+        let declare_html = {
+            let mut declare = vec![];
+            for i in 0..config.head_num() {
+                declare.push(
+                    config
+                        .all_sort()
+                        .into_iter()
+                        .enumerate()
+                        .filter_map(|(j, s)| if self.declare[i][j] { Some(s) } else { None })
+                        .collect(),
+                );
+            }
+            html! {<button onclick={Callback::from(move |_: MouseEvent| {
+                callback.emit(Move::Declare { declare: declare.clone() });
+            })}> {"declare"} </button>}
+        };
 
         html! {
             <>
-                {"query to 1" } {for player1_query_htmls} <br/>
-                {"query to 2 " } {for player2_query_htmls} <br/>
-                <button onclick={Callback::from(move |_: MouseEvent|{
-                    callback.emit(Move::Declare { declare: declare.clone() })
-                })}> {"declare"} </button> {for declare_html} <br/>
+                {for other_player_htmls.into_iter().flatten() }
+                {for deduction_html.into_iter().flatten()}
+                {declare_html}
             </>
         }
     }
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            MoveMsg::Toggle(i) => {
-                self.declare[i] = !self.declare[i];
+            MoveMsg::Toggle(i, j) => {
+                self.declare[i][j] = !self.declare[i][j];
                 true
             }
         }
@@ -120,55 +130,53 @@ impl Component for MoveView {
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct HistoryProps {
-    history: Vec<(game::game::Move, Option<game::game::Ans>)>,
+    history: Vec<MoveAns>,
 }
 
 #[function_component(HistoryView)]
 fn history_view(HistoryProps { history }: &HistoryProps) -> Html {
     history
         .iter()
-        .map(|(m, a)| {
-            let m = match m {
-                game::game::Move::Query {
+        .map(|qa| {
+            let h: Html = match qa {
+                MoveAns::Query {
                     query_to,
                     query_sort,
-                } => {
-                    format!("Q: {query_to:?} {query_sort:?}")
-                }
-                game::game::Move::Declare { declare } => {
-                    format!("Q: {declare:?}")
-                }
+                    ans,
+                } => html! {<>
+                    {format!("Q: {query_to} {query_sort}")} <br/>
+                    {format!(" A: {ans}")}
+                </>},
+                MoveAns::Declare { declare, ans } => html! {<>
+                    {format!("Q: {declare:?} ")} <br/>
+                    {format!(" A: {ans}")}
+                </>},
             };
 
-            let a = match a {
-                None => "A: None".to_string(),
-                Some(game::game::Ans::QueAns(n)) => {
-                    format!("A: {n}")
-                }
-                Some(game::game::Ans::DecAns(b)) => {
-                    format!("A: {b}")
-                }
-            };
-
-            html! {
-                <>
-                    {m} <br/>
-                    {a} <br/>
-                </>
-            }
+            html! {h}
         })
         .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct PlayerViewProps {
-    config: game::game::GameConfig,
-    view: game::game::View,
+    config: GameConfig,
+    view: View,
 }
 
 #[function_component(PlayerView)]
 fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
-    let other = view.other.iter().map(|(p, c)| {
+    let hand: Vec<Html> = {
+        let mut h: Vec<_> = vec![html!{"hand: "}];
+        for c in view.hand {
+            h.push(html!{<CardView config={config.clone()} card={c}/>});
+        }
+        h.push(html!{<br/>});
+        h
+    };
+
+    let other = view.other.iter().map(|cs| {
+        let mut h: Vec<_> = vec![];
         html! {
             <>
             {format!("p({:?}) ", p)}
