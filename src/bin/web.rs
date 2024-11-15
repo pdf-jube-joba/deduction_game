@@ -1,10 +1,11 @@
+use game::{defs::*, abstract_game::Player};
 use rand::thread_rng;
 use yew::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct CardViewProps {
-    config: game::game::GameConfig,
-    card: game::game::Card,
+    config: GameConfig,
+    card: Card,
 }
 
 #[function_component(CardView)]
@@ -24,8 +25,8 @@ struct MoveView {
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct MoveProps {
-    all_sorts: Vec<game::game::Sort>,
-    callback: Callback<game::game::Move>,
+    all_sorts: Vec<Sort>,
+    callback: Callback<Move>,
 }
 
 enum MoveMsg {
@@ -54,8 +55,8 @@ impl Component for MoveView {
             let snew = s.clone();
             let callback = callback.clone();
             let onclick = Callback::from(move |_: MouseEvent| {
-                callback.emit(game::game::Move::Query {
-                    query_to: game::game::Player(1),
+                callback.emit(Move::Query {
+                    query_to: 1,
                     query_sort: snew.clone(),
                 })
             });
@@ -70,8 +71,8 @@ impl Component for MoveView {
             let snew = s.clone();
             let callback = callback.clone();
             let onclick = Callback::from(move |_: MouseEvent| {
-                callback.emit(game::game::Move::Query {
-                    query_to: game::game::Player(2),
+                callback.emit(Move::Query {
+                    query_to: 2,
                     query_sort: snew.clone(),
                 })
             });
@@ -102,7 +103,7 @@ impl Component for MoveView {
                 {"query to 1" } {for player1_query_htmls} <br/>
                 {"query to 2 " } {for player2_query_htmls} <br/>
                 <button onclick={Callback::from(move |_: MouseEvent|{
-                    callback.emit(game::game::Move::Declare { declare: declare.clone() })
+                    callback.emit(Move::Declare { declare: declare.clone() })
                 })}> {"declare"} </button> {for declare_html} <br/>
             </>
         }
@@ -170,7 +171,7 @@ fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
     let other = view.other.iter().map(|(p, c)| {
         html! {
             <>
-            {format!("p({:?}) ", p.0)}
+            {format!("p({:?}) ", p)}
             <CardView config={config.clone()} card={*c}/> <br/>
             </>
         }
@@ -213,7 +214,7 @@ impl Component for App {
     fn view(&self, ctx: &Context<Self>) -> Html {
         let callback = ctx.link().callback(Msg::Move);
         let win = if let Some(p) = self.game.is_win() {
-            html! {{format!("win: {}", p.0)}}
+            html! {{format!("win: {}", p)}}
         } else {
             html! {{"game goes"}}
         };
@@ -229,7 +230,7 @@ impl Component for App {
             <>
             {for all_card} <br/>
             {win} <br/>
-            <PlayerView config={self.game.config().clone()} view={self.game.view_from_player(game::game::Player(0))}/>
+            <PlayerView config={self.game.config().clone()} view={self.game.view_from_player(0)}/>
             <MoveView all_sorts={self.game.config().all_sort()} callback={callback}/>
             <HistoryView history={self.game.history()}/>
             </>

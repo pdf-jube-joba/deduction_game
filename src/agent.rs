@@ -1,51 +1,27 @@
-
-use rand::{rngs::ThreadRng, thread_rng, Rng};
-use std::collections::HashSet;
-
-use super::{game::*, utils::*};
-pub trait Agent {
-    fn which(
-        &mut self,
-        config: GameConfig,
-        player: Player,
-        view: View,
-        history: Vec<(Move, Option<Ans>)>,
-    ) -> Move;
-    fn game(&mut self, game: &mut Game) -> Option<Ans> {
-        let p = game.turn();
-        let m = self.which(
-            game.config().clone(),
-            p,
-            game.view_from_player(p),
-            game.history(),
-        );
-        game.move_game(m)
-    }
-}
+use super::{defs::*, utils::*};
+use crate::abstract_game::{Agent, ImperfectInfoGame};
+use rand::{rngs::ThreadRng, thread_rng};
 
 #[derive(Debug, Clone)]
 #[cfg(target_arch = "x86_64")]
-pub struct User;
+pub struct CUIUser;
 
 #[cfg(target_arch = "x86_64")]
-impl Default for User {
+impl Default for CUIUser {
     fn default() -> Self {
         Self
     }
 }
-
 #[cfg(target_arch = "x86_64")]
-impl Agent for User {
-    fn which(
+impl Agent for CUIUser {
+    type Game = Game;
+    fn use_info(
         &mut self,
-        config: GameConfig,
-        _: Player,
-        _: View,
-        _: Vec<(Move, Option<Ans>)>,
-    ) -> Move {
+        info: <Self::Game as ImperfectInfoGame>::Info,
+    ) -> <Self::Game as ImperfectInfoGame>::Move {
         use proconio::input;
 
-        println!("your turn");
+        println!("your turn, view: {:?}", info.view);
         loop {
             input! {
                 move_string: String,
@@ -56,22 +32,31 @@ impl Agent for User {
                     pl_to: usize,
                     sort: String,
                 }
-                let Some(sort) = config.all_sort().into_iter().find(|s: &Sort| s.0 == sort) else {
+                let Some(sort) = info
+                    .config
+                    .all_sort()
+                    .into_iter()
+                    .find(|s: &Sort| s.0 == sort)
+                else {
                     println!("sort が正しく入力されなかった。");
                     continue;
                 };
                 return Move::Query {
-                    query_to: config.player_turn(pl_to),
+                    query_to: info.config.player_turn(pl_to),
                     query_sort: sort,
                 };
             } else if move_string == "A" {
-                // o A x B x C で head が A, not B, not C の宣言
-                input! {
-                    sorts: [(char, String); config.all_sort().len()],
+                let mut sorts_of_cards = vec![];
+                for _ in 0..info.config.head_num() {
+                    input! {
+                        n: usize,
+                        sorts: [String; n],
+                    }
+                    sorts_of_cards.push(sorts);
                 }
-                let declare: Vec<_> = sorts
+                let declare: Vec<_> = sorts_of_cards
                     .into_iter()
-                    .map(|(c, sort)| (Sort(sort), c == 'o'))
+                    .map(|sort| sort.into_iter().map(Sort).collect())
                     .collect();
                 return Move::Declare { declare };
             }
@@ -94,55 +79,21 @@ impl Default for RandomPlayer {
 }
 
 impl Agent for RandomPlayer {
-    fn which(
+    type Game = Game;
+    fn use_info(
         &mut self,
-        config: GameConfig,
-        player: Player,
-        view: View,
-        history: Vec<(Move, Option<Ans>)>,
-    ) -> Move {
-        let answerable = answerable(config.clone(), player, view.clone(), history.clone());
-
-        if let Some(answer) = answerable {
-            Move::Declare { declare: answer }
+        info: <Self::Game as ImperfectInfoGame>::Info,
+    ) -> <Self::Game as ImperfectInfoGame>::Move {
+        // answerable なとき
+        if let Some(answer) = answerable(info.clone()) {
+            return Move::Declare { declare: answer };
+        }
+        let possible_moves = query_at(info.clone());
+        if possible_moves.is_empty() {
+            let mut possible_declare = declare_at(info);
+            possible_declare.next().unwrap() // possible declare がないのはありえないと思う。
         } else {
-            let my_query: HashSet<_> = history
-                .iter()
-                .skip(player.0)
-                .step_by(3)
-                .map(|(q, _)| q)
-                .collect();
-            let possible_query: Vec<_> = all_query(&config)
-                .filter(|query| {
-                    !my_query.contains(query) && {
-                        let Move::Query {
-                            query_to,
-                            query_sort: _,
-                        } = query
-                        else {
-                            unreachable!();
-                        };
-                        *query_to != player
-                    }
-                }) // TODO
-                .collect();
-            let n = self.thread_rng.gen_range(0..possible_query.len());
-            if let Some(query) = possible_query.into_iter().nth(n) {
-                query
-            } else {
-                // 聞くことができないので答えるしかない。
-                let possible = possible_states(config.clone(), player, view, history)
-                    .next()
-                    .unwrap();
-                let head = possible.players_head(player);
-                Move::Declare {
-                    declare: config
-                        .all_sort()
-                        .into_iter()
-                        .map(|s| (s.clone(), config.has_sort(&head, &s)))
-                        .collect(),
-                }
-            }
+            random_vec(&mut self.thread_rng, possible_moves)
         }
     }
 }
@@ -159,48 +110,44 @@ impl Default for UseEntropyPlayer {
 }
 
 impl Agent for UseEntropyPlayer {
-    fn which(
+    type Game = Game;
+    fn use_info(
         &mut self,
-        config: GameConfig,
-        player: Player,
-        view: View,
-        history: Vec<(Move, Option<Ans>)>,
-    ) -> Move {
-        let answerable = answerable(config.clone(), player, view.clone(), history.clone());
-
-        if let Some(answer) = answerable {
-            Move::Declare { declare: answer }
-        } else {
-            let possible_states =
-                possible_states(config.clone(), player, view, history).collect::<Vec<_>>();
-            let possible_query = all_query(&config);
-
-            let a = possible_query
-                .filter_map(|query| {
-                    let mut distribution: Vec<usize> = vec![0; config.cards_num() / 2 + 1];
-                    // query に対して、 ans::QueAns(n) が返ってきたときの、それと整合する states の数の分布を表す: distribution[n] = #{state | 整合する}
-                    for state in &possible_states {
-                        let Ans::QueAns(n) = answer(&config, state, player, &query)? else {
-                            unreachable!()
-                        };
-                        distribution[n] += 1;
-                    }
-
-                    let n: usize = distribution.iter().sum();
-                    let mut entropy: f64 = 0_f64;
-                    for i in distribution {
-                        if i == 0 {
-                            continue;
-                        }
-                        entropy += ((i as f64) / (n as f64)) * (i as f64).log2();
-                    }
-
-                    Some((query, entropy))
-                })
-                .min_by(|(_, entropy1), (_, entropy2)| entropy1.partial_cmp(entropy2).unwrap())
-                .unwrap();
-
-            a.0
+        info: <Self::Game as ImperfectInfoGame>::Info,
+    ) -> <Self::Game as ImperfectInfoGame>::Move {
+        if let Some(answer) = answerable(info.clone()) {
+            return Move::Declare { declare: answer };
         }
+        let who = info.player_turn();
+        let distrs = info.config.all_states();
+
+        let (_, q) = query_at(info.clone())
+            .into_iter()
+            .map(|q| {
+                let mut distribution = vec![0; info.config.cards_num()];
+                for distr in &distrs {
+                    let MoveAns::Query {
+                        query_to: _,
+                        query_sort: _,
+                        ans,
+                    } = answer(&info.config, distr, q.clone(), who)
+                    else {
+                        unreachable!()
+                    };
+                    distribution[ans] += 1;
+                }
+                let mut entropy: f64 = 0_f64;
+                for i in distribution {
+                    if i == 0 {
+                        continue;
+                    }
+                    entropy += ((i as f64) / (distrs.len() as f64)) * (i as f64).log2();
+                }
+                (entropy, q)
+            })
+            .min_by(|(entropy1, _), (entropy2, _)| entropy1.partial_cmp(entropy2).unwrap())
+            .unwrap();
+
+        q
     }
 }
