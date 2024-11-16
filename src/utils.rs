@@ -89,25 +89,6 @@ pub fn answerable(
     Some(heads_sorts)
 }
 
-pub fn query_at(
-    Info {
-        config,
-        query_answer,
-        view: _,
-    }: Info,
-) -> Vec<Move> {
-    let player = config.player_turn(query_answer.len());
-    let mut all_query: HashSet<_> = all_query(&config).collect();
-    for qa in query_answer
-        .iter()
-        .skip(player)
-        .step_by(config.player_num())
-    {
-        all_query.remove(&qa.move_of_this());
-    }
-    all_query.into_iter().collect()
-}
-
 pub fn random_vec<R, T>(rng: &mut R, v: Vec<T>) -> T
 where
     R: rand::Rng,
@@ -116,35 +97,20 @@ where
     v.into_iter().nth(i).unwrap()
 }
 
-pub fn declare_at(
-    Info {
-        config,
-        query_answer,
-        view: _,
-    }: Info,
-) -> impl Iterator<Item = Move> {
-    let all_q: HashSet<_> = query_answer
-        .into_iter()
-        .map(|qa| qa.move_of_this())
-        .collect();
-    config
-        .all_cards()
-        .into_iter()
-        .permutations(config.head_num())
-        .map(move |v| {
-            let declare: Vec<Vec<Sort>> =
-                v.into_iter().map(|c| config.all_sort_of_card(&c)).collect();
-            Move::Declare { declare }
-        })
-        .filter(move |q| !all_q.contains(q))
-}
-
 #[cfg(test)]
 mod tests {
+    use rand::thread_rng;
+
+    use crate::abstract_game::ImperfectInfoGame;
+
     use super::*;
     #[test]
-    fn test_default_config() {
+    fn test() {
         let config = default_config();
         eprintln!("{config:?}");
+        let game = config.gen_random(&mut thread_rng());
+        eprintln!("{game:?}");
+        let info = game.info_and_move_now();
+        eprintln!("{info:?}");
     }
 }

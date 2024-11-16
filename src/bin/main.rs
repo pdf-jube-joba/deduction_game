@@ -16,8 +16,8 @@ fn main() {
         loop {
             let player = game.player_turn();
             let agent = &mut players[player];
-            let info = game.info_at_now();
-            let m = agent.use_info(info);
+            let info = game.info_and_move_now();
+            let m = agent.use_info(info.0, info.1);
             if !game.move_game(m.clone()) {
                 panic!("有効な手でなかった")
             }

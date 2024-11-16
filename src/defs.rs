@@ -98,7 +98,19 @@ pub struct Distr {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct View {
     pub hand: Vec<Card>,
-    pub other: Vec<Vec<Card>>,
+    pub other: Vec<Option<Vec<Card>>>,
+}
+
+impl View {
+    fn sort_num(&self, config: &GameConfig, s: &Sort) -> usize {
+        self.other
+            .iter()
+            .filter_map(|v| v.as_ref())
+            .flatten()
+            .chain(self.hand.iter())
+            .filter(|c| config.has_sort(c, s))
+            .count()
+    }
 }
 
 impl GameConfig {
@@ -111,11 +123,11 @@ impl GameConfig {
             .permutations(self.cards_num())
             .map(|perm| {
                 let mut state = vec![];
-                for i in 0..self.player_num {
-                    let ind = self.player_num * i;
+                for p in 0..self.player_num {
+                    let ind = (self.head_num + self.hand_num) * p;
                     state.push(PlCard {
                         hand: perm[ind..ind + self.hand_num].to_vec(),
-                        head: perm[ind + self.hand_num..ind + self.hand_num * self.head_num]
+                        head: perm[ind + self.hand_num..ind + self.hand_num + self.head_num]
                             .to_vec(),
                     })
                 }
@@ -145,13 +157,8 @@ pub fn answer(config: &GameConfig, distr: &Distr, m: Move, who: Player) -> MoveA
             query_to,
             query_sort,
         } => {
-            let View { hand, other } = distr.cards_from_player(query_to);
-            let sort_num: usize = other
-                .into_iter()
-                .flatten()
-                .chain(hand)
-                .filter(|c| config.has_sort(c, &query_sort))
-                .count();
+            let view = distr.cards_from_player(query_to);
+            let sort_num: usize = view.sort_num(config, &query_sort);
             MoveAns::Query {
                 query_to,
                 query_sort,
@@ -186,7 +193,7 @@ impl Distr {
             .state
             .iter()
             .enumerate()
-            .filter_map(|(i, c)| {
+            .map(|(i, c)| {
                 if i != player {
                     Some(c.head.clone())
                 } else {
@@ -262,6 +269,52 @@ impl Info {
     pub fn player_turn(&self) -> Player {
         self.config.player_turn(self.query_answer.len())
     }
+    pub fn query_at(&self) -> Vec<Move> {
+        let p = self.config.player_turn(self.query_answer.len());
+        let past_moves: HashSet<Move> = self
+            .query_answer
+            .iter()
+            .skip(p)
+            .step_by(self.config.player_num())
+            .map(|qa| qa.move_of_this())
+            .collect();
+        all_query(&self.config)
+            .filter(|q| {
+                !past_moves.contains(q)
+                    && !matches!(
+                        q,
+                        Move::Query {
+                            query_to,
+                            query_sort: _
+                        } if *query_to == p
+                    )
+            })
+            .collect()
+    }
+    pub fn declare_at(&self) -> Vec<Move> {
+        let p = self.config.player_turn(self.query_answer.len());
+        let past_moves: HashSet<Move> = self
+            .query_answer
+            .iter()
+            .skip(p)
+            .step_by(self.config.player_num())
+            .map(|qa| qa.move_of_this())
+            .collect();
+        self.config
+            .all_cards()
+            .into_iter()
+            .permutations(self.config.head_num())
+            .map(move |v| {
+                let declare: Vec<Vec<Sort>> = v
+                    .into_iter()
+                    .map(|c| self.config.all_sort_of_card(&c))
+                    .collect();
+                Move::Declare { declare }
+            })
+            .inspect(|d| eprintln!("p:{d:?}"))
+            .filter(move |q| !past_moves.contains(q))
+            .collect()
+    }
 }
 
 impl abstract_game::ImperfectInfoGame for Game {
@@ -271,15 +324,26 @@ impl abstract_game::ImperfectInfoGame for Game {
         self.config.player_num
     }
     fn player_turn(&self) -> Player {
-        self.query_answer.len()
+        self.config.player_turn(self.query_answer.len())
     }
-    fn info_at_now(&self) -> Self::Info {
-        Self::Info {
+    fn info_and_move_now(&self) -> (Self::Info, Vec<Self::Move>) {
+        let info = Self::Info {
             config: self.config.clone(),
             query_answer: self.query_answer.clone(),
             view: self.distr.cards_from_player(self.player_turn()),
+        };
+        eprintln!("{:?}", self.is_win());
+        if self.is_win().is_some() {
+            return (info, vec![]);
         }
+        let m = info
+            .query_at()
+            .into_iter()
+            .chain(info.declare_at())
+            .collect();
+        (info, m)
     }
+
     fn is_win(&self) -> Option<Vec<usize>> {
         let p = self.player_turn();
         let mut v = vec![0; self.player_number()];
@@ -294,55 +358,11 @@ impl abstract_game::ImperfectInfoGame for Game {
             None
         }
     }
-    fn move_at_now(&self) -> Vec<Self::Move> {
-        if self.is_win().is_none() {
-            return vec![];
-        }
-        let mut all_query: HashSet<_> = all_query(&self.config).collect();
-        for qa in self
-            .query_answer
-            .iter()
-            .skip(self.player_turn())
-            .step_by(self.player_number())
-        {
-            all_query.remove(&qa.move_of_this());
-        }
-        all_query.into_iter().collect()
-    }
     fn move_game(&mut self, m: Self::Move) -> bool {
-        if !self.move_at_now().contains(&m) {
+        if !self.info_and_move_now().1.contains(&m) {
             return false;
         }
-        let qa = match m {
-            Move::Query {
-                query_to,
-                query_sort,
-            } => {
-                let View { hand, other } = self.distr.cards_from_player(query_to);
-                let sort_num: usize = other
-                    .into_iter()
-                    .flatten()
-                    .chain(hand)
-                    .filter(|c| self.config.has_sort(c, &query_sort))
-                    .count();
-                MoveAns::Query {
-                    query_to,
-                    query_sort,
-                    ans: sort_num,
-                }
-            }
-            Move::Declare { declare } => {
-                let player_head = self.distr.players_head(self.player_number());
-                let ans = (0..self.config.head_num).all(|i| {
-                    let set1: HashSet<_> = declare[i].iter().cloned().collect();
-                    let card = player_head[i];
-                    let set2: HashSet<_> =
-                        self.config.all_sort_of_card(&card).into_iter().collect();
-                    set1 == set2
-                });
-                MoveAns::Declare { declare, ans }
-            }
-        };
+        let qa = answer(&self.config, &self.distr, m, self.player_turn());
         self.query_answer.push(qa);
         true
     }

@@ -18,8 +18,9 @@ mod tests {
         while game.is_win().is_none() {
             let player = game.player_turn();
             let agent = &mut players[player];
-            let info = game.info_at_now();
-            let m = agent.use_info(info);
+            let info = game.info_and_move_now();
+            let m = agent.use_info(info.0, info.1);
+            eprintln!("{m:?}");
             if !game.move_game(m) {
                 panic!("有効でない move を返した！")
             }

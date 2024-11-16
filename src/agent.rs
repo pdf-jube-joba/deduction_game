@@ -12,12 +12,14 @@ impl Default for CUIUser {
         Self
     }
 }
+
 #[cfg(target_arch = "x86_64")]
 impl Agent for CUIUser {
     type Game = Game;
     fn use_info(
         &mut self,
         info: <Self::Game as ImperfectInfoGame>::Info,
+        _possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         use proconio::input;
 
@@ -65,42 +67,56 @@ impl Agent for CUIUser {
 }
 
 // 必ず当てれるときは当てるがそうじゃないときは可能な手からランダムに打つ。
-#[derive(Debug, Clone)]
-pub struct RandomPlayer {
-    thread_rng: ThreadRng,
+#[derive(Debug, Clone, PartialEq)]
+pub struct RandomPlayer<R>
+where
+    R: rand::Rng,
+{
+    rng: R,
 }
 
-impl Default for RandomPlayer {
-    fn default() -> Self {
-        Self {
-            thread_rng: thread_rng(),
-        }
+impl<R> RandomPlayer<R>
+where
+    R: rand::Rng,
+{
+    pub fn new(rng: R) -> Self {
+        Self { rng }
     }
 }
 
-impl Agent for RandomPlayer {
+impl Default for RandomPlayer<ThreadRng> {
+    fn default() -> Self {
+        Self { rng: thread_rng() }
+    }
+}
+
+impl<R> Agent for RandomPlayer<R>
+where
+    R: rand::Rng,
+{
     type Game = Game;
     fn use_info(
         &mut self,
         info: <Self::Game as ImperfectInfoGame>::Info,
+        _possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         // answerable なとき
         if let Some(answer) = answerable(info.clone()) {
             return Move::Declare { declare: answer };
         }
-        let possible_moves = query_at(info.clone());
+        let possible_moves = info.query_at();
         if possible_moves.is_empty() {
-            let mut possible_declare = declare_at(info);
-            possible_declare.next().unwrap() // possible declare がないのはありえないと思う。
+            let possible_declare = info.declare_at();
+            possible_declare.into_iter().next().unwrap() // possible declare がないのはありえないと思う。
         } else {
-            random_vec(&mut self.thread_rng, possible_moves)
+            random_vec(&mut self.rng, possible_moves)
         }
     }
 }
 
 // 現在の履歴から可能な状態の全体を考え、各 query に対して可能な状態の回答の分布のエントロピーを計算する。
 // 一番エントロピーが低いと、情報量がより得られているので、その手を選ぶ。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UseEntropyPlayer;
 
 impl Default for UseEntropyPlayer {
@@ -114,6 +130,7 @@ impl Agent for UseEntropyPlayer {
     fn use_info(
         &mut self,
         info: <Self::Game as ImperfectInfoGame>::Info,
+        _possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         if let Some(answer) = answerable(info.clone()) {
             return Move::Declare { declare: answer };
@@ -121,7 +138,8 @@ impl Agent for UseEntropyPlayer {
         let who = info.player_turn();
         let distrs = info.config.all_states();
 
-        let (_, q) = query_at(info.clone())
+        let (_, q) = info
+            .query_at()
             .into_iter()
             .map(|q| {
                 let mut distribution = vec![0; info.config.cards_num()];

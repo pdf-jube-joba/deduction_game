@@ -1,6 +1,32 @@
-use game::{abstract_game::Player, defs::*};
-use rand::thread_rng;
+use game::{
+    abstract_game::{Agent, ImperfectInfoGame, Player},
+    agent::*,
+    defs::*,
+    utils::default_config,
+};
+use gloo::timers::callback::Interval;
+use rand::{rngs::SmallRng, thread_rng, SeedableRng};
 use yew::prelude::*;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Opponent {
+    Random(RandomPlayer<rand::rngs::SmallRng>),
+    Entoropy(UseEntropyPlayer),
+}
+
+impl Agent for Opponent {
+    type Game = Game;
+    fn use_info(
+        &mut self,
+        info: <Self::Game as ImperfectInfoGame>::Info,
+        possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
+    ) -> <Self::Game as ImperfectInfoGame>::Move {
+        match self {
+            Opponent::Random(p) => p.use_info(info, possible_moves),
+            Opponent::Entoropy(p) => p.use_info(info, possible_moves),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct CardViewProps {
@@ -167,89 +193,145 @@ struct PlayerViewProps {
 #[function_component(PlayerView)]
 fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
     let hand: Vec<Html> = {
-        let mut h: Vec<_> = vec![html!{"hand: "}];
-        for c in view.hand {
-            h.push(html!{<CardView config={config.clone()} card={c}/>});
+        let mut h: Vec<_> = vec![html! {"hand: "}];
+        for c in &view.hand {
+            h.push(html! {<CardView config={config.clone()} card={c.clone()}/>});
         }
-        h.push(html!{<br/>});
+        h.push(html! {<br/>});
         h
     };
 
-    let other = view.other.iter().map(|cs| {
-        let mut h: Vec<_> = vec![];
-        html! {
+    let other = view.other.iter().enumerate().filter_map(|(p, cs)| {
+        let cs = cs.as_ref()?;
+        Some(html! {
             <>
             {format!("p({:?}) ", p)}
-            <CardView config={config.clone()} card={*c}/> <br/>
+            {for cs.iter().map(|c| html!{<CardView config={config.clone()} card={*c}/>})} <br/>
             </>
-        }
+        })
     });
+
     html! {
         <>
-            {"hand "} <CardView config={config.clone()} card={view.hand}/> <br/>
+            {hand}
             {for other}
         </>
     }
 }
 
-struct App {
-    game: game::game::Game,
-    p1: Box<dyn game::agent::Agent>,
-    p2: Box<dyn game::agent::Agent>,
+struct GameApp {
+    game: Game,
+    other_players: Vec<Option<Opponent>>,
+    movable: bool,
+    interval: Interval,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum Msg {
-    Move(game::game::Move),
+enum GameMsg {
+    Move(Move),
+    OtherMove,
 }
 
-impl Component for App {
-    type Message = Msg;
-    type Properties = ();
-    fn create(_ctx: &Context<Self>) -> Self {
-        let mut rng = thread_rng();
-        let config = game::game::default_config();
-        let state = game::game::State::rand(&config, &mut rng);
-        let game = game::game::Game::gen_from_state(&config, state);
-        let p1 = game::agent::RandomPlayer::default();
-        let p2 = game::agent::RandomPlayer::default();
+#[derive(Clone, PartialEq, Properties)]
+struct GameProps {
+    config: GameConfig,
+    as_player: Player,
+    players: Vec<Option<Opponent>>,
+}
+
+impl GameProps {
+    fn new(config: GameConfig, as_player: Player, players: Vec<Option<Opponent>>) -> Option<Self> {
+        if config.player_num() != players.len() {
+            return None;
+        }
+        for (i, v) in players.iter().enumerate() {
+            if i == as_player && players[i].is_some() {
+                return None;
+            }
+            if i != as_player && players[i].is_none() {
+                return None;
+            }
+        }
+        Some(Self {
+            config,
+            as_player,
+            players,
+        })
+    }
+}
+
+impl Component for GameApp {
+    type Message = GameMsg;
+    type Properties = GameProps;
+    fn create(ctx: &Context<Self>) -> Self {
+        let GameProps {
+            config,
+            players,
+            as_player,
+        } = ctx.props();
+        let callback = ctx.link().callback(|_| GameMsg::OtherMove);
         Self {
-            game,
-            p1: Box::new(p1),
-            p2: Box::new(p2),
+            game: config.gen_random(&mut thread_rng()),
+            other_players: players.clone(),
+            movable: *as_player == 0,
+            interval: Interval::new(1000, move || callback.emit(())),
         }
     }
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let callback = ctx.link().callback(Msg::Move);
+        let GameProps {
+            config,
+            players: _,
+            as_player,
+        } = ctx.props();
+        let move_callback = ctx.link().callback(GameMsg::Move);
         let win = if let Some(p) = self.game.is_win() {
-            html! {{format!("win: {}", p)}}
+            html! {{format!("win: {p:?}")}}
         } else {
             html! {{"game goes"}}
         };
-        let all_card = self.game.config().all_cards().into_iter().map(|c| {
+        let all_card = config.all_cards().into_iter().map(|c| {
             html! {
                 <>
-                <CardView config={self.game.config().clone()} card={c}/> {" "}
+                <CardView config={config.clone()} card={c}/> {" "}
                 </>
             }
         });
 
+        let Info {
+            config,
+            query_answer,
+            view,
+        } = self.game.info_and_move_now().0;
+
         html! {
             <>
-            {for all_card} <br/>
+            {"cards:"} {for all_card} <br/>
             {win} <br/>
-            <PlayerView config={self.game.config().clone()} view={self.game.view_from_player(0)}/>
-            <MoveView all_sorts={self.game.config().all_sort()} callback={callback}/>
-            <HistoryView history={self.game.history()}/>
+            <PlayerView config={config.clone()} view={view}/>
+            <MoveView as_player={as_player} config={config.clone()} callback={move_callback}/>
+            <HistoryView history={query_answer}/>
             </>
         }
     }
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        let GameProps {
+            config: _,
+            as_player,
+            players: _,
+        } = ctx.props();
+        let who_turn = self.game.player_turn();
         match msg {
-            Msg::Move(m) => {
+            GameMsg::Move(m) if who_turn == *as_player => {
                 self.game.move_game(m);
-                self.p1.game(&mut self.game);
-                self.p2.game(&mut self.game);
+            }
+            GameMsg::OtherMove if who_turn != *as_player => {
+                let p = self.other_players[who_turn].as_mut().unwrap();
+                let info = self.game.info_and_move_now();
+                let m = p.use_info(info.0, info.1);
+                self.game.move_game(m);
+            }
+            _ => {
+                return false;
             }
         }
         true
@@ -259,5 +341,19 @@ impl Component for App {
 fn main() {
     let document = gloo::utils::document();
     let target_element = document.get_element_by_id("main").unwrap();
-    yew::Renderer::<App>::with_root(target_element).render();
+    let props = GameProps::new(
+        default_config(),
+        0,
+        vec![
+            None,
+            Some(Opponent::Random(
+                RandomPlayer::new(SmallRng::from_entropy()),
+            )),
+            Some(Opponent::Random(
+                RandomPlayer::new(SmallRng::from_entropy()),
+            )),
+        ],
+    )
+    .unwrap();
+    yew::Renderer::<GameApp>::with_root_and_props(target_element, props).render();
 }
