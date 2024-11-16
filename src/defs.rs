@@ -15,11 +15,10 @@ impl Display for Sort {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Card(pub usize);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GameConfig {
-    sort_kinds: Vec<Sort>,
-    cards_num: usize,
-    cards_sort: Vec<(Card, Sort)>,
+    sorts: HashSet<Sort>,
+    cards_sort: Vec<HashSet<Sort>>,
     player_num: usize,
     head_num: usize,
     hand_num: usize,
@@ -27,24 +26,25 @@ pub struct GameConfig {
 
 impl GameConfig {
     pub fn new(
-        sort_kinds: Vec<Sort>,
-        cards_num: usize,
-        cards_sort: Vec<(Card, Sort)>,
+        sorts: HashSet<Sort>,
+        cards_sort: Vec<HashSet<Sort>>, // cards_sort[i] = i-th card's sorts
         player_num: usize,
         head_num: usize,
         hand_num: usize,
     ) -> Option<Self> {
+        let cards_num = cards_sort.len();
         if (head_num + hand_num) * player_num > cards_num {
             return None;
         }
-        for (_, s) in &cards_sort {
-            if !sort_kinds.contains(s) {
-                return None;
+        for ss in &cards_sort {
+            for s in ss {
+                if !sorts.contains(s) {
+                    return None;
+                }
             }
         }
         Some(Self {
-            sort_kinds,
-            cards_num,
+            sorts,
             cards_sort,
             player_num,
             head_num,
@@ -59,7 +59,7 @@ impl GameConfig {
         n % self.player_num
     }
     pub fn cards_num(&self) -> usize {
-        self.cards_num
+        self.cards_sort.len()
     }
     pub fn head_num(&self) -> usize {
         self.head_num
@@ -70,35 +70,35 @@ impl GameConfig {
     pub fn all_player(&self) -> Vec<Player> {
         (0..self.player_num).collect()
     }
-    pub fn all_sort(&self) -> Vec<Sort> {
-        self.sort_kinds.clone()
+    pub fn all_sort(&self) -> HashSet<Sort> {
+        self.sorts.clone()
     }
     pub fn all_cards(&self) -> Vec<Card> {
-        (0..self.cards_num).map(Card).collect()
+        (0..self.cards_num()).map(Card).collect()
     }
-    pub fn all_sort_of_card(&self, card: &Card) -> Vec<Sort> {
-        self.cards_sort
-            .iter()
-            .filter_map(|(c, s)| if c == card { Some(s.clone()) } else { None })
-            .collect()
+    pub fn all_sort_of_card(&self, card: &Card) -> &HashSet<Sort> {
+        if card.0 > self.cards_num() {
+            panic!("変なカード")
+        }
+        &self.cards_sort[card.0]
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlCard {
-    pub hand: Vec<Card>,
-    pub head: Vec<Card>,
+    pub hand: HashSet<Card>,
+    pub head: HashSet<Card>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Distr {
-    state: Vec<PlCard>,
+    state: Vec<PlCard>, // state[i] = player i's hand and head
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct View {
-    pub hand: Vec<Card>,
-    pub other: Vec<Option<Vec<Card>>>,
+    pub hand: HashSet<Card>,
+    pub other: Vec<Option<HashSet<Card>>>,
 }
 
 impl View {
@@ -115,7 +115,7 @@ impl View {
 
 impl GameConfig {
     pub fn has_sort(&self, card: &Card, sort: &Sort) -> bool {
-        self.cards_sort.iter().any(|(c, s)| c == card && s == sort)
+        self.cards_sort[card.0].contains(sort)
     }
     pub fn all_states(&self) -> Vec<Distr> {
         self.all_cards()
@@ -126,9 +126,11 @@ impl GameConfig {
                 for p in 0..self.player_num {
                     let ind = (self.head_num + self.hand_num) * p;
                     state.push(PlCard {
-                        hand: perm[ind..ind + self.hand_num].to_vec(),
+                        hand: perm[ind..ind + self.hand_num].iter().cloned().collect(),
                         head: perm[ind + self.hand_num..ind + self.hand_num + self.head_num]
-                            .to_vec(),
+                            .iter()
+                            .cloned()
+                            .collect(),
                     })
                 }
                 Distr { state }
@@ -150,45 +152,17 @@ impl GameConfig {
     }
 }
 
-pub fn answer(config: &GameConfig, distr: &Distr, m: Move, who: Player) -> MoveAns {
-    debug_assert!(config.all_states().contains(distr));
-    match m {
-        Move::Query {
-            query_to,
-            query_sort,
-        } => {
-            let view = distr.cards_from_player(query_to);
-            let sort_num: usize = view.sort_num(config, &query_sort);
-            MoveAns::Query {
-                query_to,
-                query_sort,
-                ans: sort_num,
-            }
-        }
-        Move::Declare { declare } => {
-            let player_head = distr.players_head(who);
-            let ans = (0..config.head_num).all(|i| {
-                let set1: HashSet<_> = declare[i].iter().cloned().collect();
-                let card = player_head[i];
-                let set2: HashSet<_> = config.all_sort_of_card(&card).into_iter().collect();
-                set1 == set2
-            });
-            MoveAns::Declare { declare, ans }
-        }
-    }
-}
-
 impl Distr {
-    pub fn players_head(&self, player: Player) -> Vec<Card> {
-        self.state[player].head.clone()
+    pub fn players_head(&self, player: Player) -> &HashSet<Card> {
+        &self.state[player].head
     }
 
-    pub fn players_hand(&self, player: Player) -> Vec<Card> {
-        self.state[player].hand.clone()
+    pub fn players_hand(&self, player: Player) -> &HashSet<Card> {
+        &self.state[player].hand
     }
 
     pub fn cards_from_player(&self, player: Player) -> View {
-        let hand = self.players_hand(player);
+        let hand = self.players_hand(player).clone();
         let other = self
             .state
             .iter()
@@ -205,13 +179,13 @@ impl Distr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Move {
     Query { query_to: Player, query_sort: Sort }, // 同じ質問はできない。
-    Declare { declare: Vec<Vec<Sort>> },          // 全てのソートについて回答している必要がある。
+    Declare { declare: HashSet<Card> },           // 全てのソートについて回答している必要がある。
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MoveAns {
     Query {
         query_to: Player,
@@ -219,7 +193,7 @@ pub enum MoveAns {
         ans: usize,
     },
     Declare {
-        declare: Vec<Vec<Sort>>,
+        declare: HashSet<Card>,
         ans: bool,
     },
 }
@@ -242,8 +216,30 @@ impl MoveAns {
     }
 }
 
+pub fn answer(config: &GameConfig, distr: &Distr, m: Move, who: Player) -> MoveAns {
+    match m {
+        Move::Query {
+            query_to,
+            query_sort,
+        } => {
+            let view = distr.cards_from_player(query_to);
+            let sort_num: usize = view.sort_num(config, &query_sort);
+            MoveAns::Query {
+                query_to,
+                query_sort,
+                ans: sort_num,
+            }
+        }
+        Move::Declare { declare } => {
+            let player_head = distr.players_head(who);
+            let b = declare == *player_head;
+            MoveAns::Declare { declare, ans: b }
+        }
+    }
+}
+
 pub fn all_query(config: &GameConfig) -> impl Iterator<Item = Move> {
-    itertools::iproduct!(config.all_player(), config.all_sort()).map(|(player_num, sort)| {
+    itertools::iproduct!(config.all_sort(), config.all_player(),).map(|(sort, player_num)| {
         Move::Query {
             query_to: player_num,
             query_sort: sort,
@@ -251,14 +247,14 @@ pub fn all_query(config: &GameConfig) -> impl Iterator<Item = Move> {
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Game {
     config: GameConfig,
     distr: Distr,
     query_answer: Vec<MoveAns>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Info {
     pub config: GameConfig,
     pub query_answer: Vec<MoveAns>,
@@ -271,7 +267,7 @@ impl Info {
     }
     pub fn query_at(&self) -> Vec<Move> {
         let p = self.config.player_turn(self.query_answer.len());
-        let past_moves: HashSet<Move> = self
+        let past_moves: Vec<Move> = self
             .query_answer
             .iter()
             .skip(p)
@@ -293,7 +289,7 @@ impl Info {
     }
     pub fn declare_at(&self) -> Vec<Move> {
         let p = self.config.player_turn(self.query_answer.len());
-        let past_moves: HashSet<Move> = self
+        let past_moves: Vec<Move> = self
             .query_answer
             .iter()
             .skip(p)
@@ -304,14 +300,9 @@ impl Info {
             .all_cards()
             .into_iter()
             .permutations(self.config.head_num())
-            .map(move |v| {
-                let declare: Vec<Vec<Sort>> = v
-                    .into_iter()
-                    .map(|c| self.config.all_sort_of_card(&c))
-                    .collect();
-                Move::Declare { declare }
+            .map(move |declare| Move::Declare {
+                declare: declare.into_iter().collect(),
             })
-            .inspect(|d| eprintln!("p:{d:?}"))
             .filter(move |q| !past_moves.contains(q))
             .collect()
     }
@@ -332,7 +323,6 @@ impl abstract_game::ImperfectInfoGame for Game {
             query_answer: self.query_answer.clone(),
             view: self.distr.cards_from_player(self.player_turn()),
         };
-        eprintln!("{:?}", self.is_win());
         if self.is_win().is_some() {
             return (info, vec![]);
         }

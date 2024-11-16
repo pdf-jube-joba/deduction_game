@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use game::{
     abstract_game::{Agent, ImperfectInfoGame, Player},
     agent::*,
@@ -46,7 +48,7 @@ fn card_view(CardViewProps { config, card }: &CardViewProps) -> Html {
 }
 
 struct MoveView {
-    declare: Vec<Vec<bool>>,
+    declare: Vec<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -57,7 +59,7 @@ struct MoveProps {
 }
 
 enum MoveMsg {
-    Toggle(usize, usize),
+    Toggle(usize),
 }
 
 impl Component for MoveView {
@@ -70,7 +72,7 @@ impl Component for MoveView {
             callback: _,
         } = ctx.props();
         Self {
-            declare: vec![vec![false; config.all_sort().len()]; config.head_num() - 1],
+            declare: vec![false; config.cards_num()],
         }
     }
     fn view(&self, ctx: &Context<Self>) -> Html {
@@ -79,6 +81,7 @@ impl Component for MoveView {
             config,
             callback,
         } = ctx.props().clone();
+        // query to other player
         let mut other_player_htmls = vec![];
         for i in 0..config.player_num() {
             if i != as_player {
@@ -101,53 +104,61 @@ impl Component for MoveView {
             };
         }
 
-        let mut deduction_html = vec![];
-        for i in 0..config.player_num() {
-            if i != as_player {
-                let mut htmls = vec![];
-                for (j, s) in config.all_sort().into_iter().enumerate() {
-                    let snew = s.clone();
-                    let callback = ctx
-                        .link()
-                        .callback(move |_: MouseEvent| MoveMsg::Toggle(i, j));
-                    htmls.push(html! {
-                        <button onclick={callback}> {format!("{snew}: {}", if self.declare[i][j] {"t"} else {"f"})} </button>
-                    });
-                }
-                htmls.push(html! {<br/>});
-                deduction_html.push(htmls);
-            }
-        }
+        // let mut deduction_html = vec![];
+        // for i in 0..config.player_num() {
+        //     if i != as_player {
+        //         let mut htmls = vec![];
+        //         for (j, s) in config.all_sort().into_iter().enumerate() {
+        //             let snew = s.clone();
+        //             let callback = ctx
+        //                 .link()
+        //                 .callback(move |_: MouseEvent| MoveMsg::Toggle(i, j));
+        //             htmls.push(html! {
+        //                 <button onclick={callback}> {format!("{snew}: {}", if self.declare[i][j] {"t"} else {"f"})} </button>
+        //             });
+        //         }
+        //         htmls.push(html! {<br/>});
+        //         deduction_html.push(htmls);
+        //     }
+        // }
 
+        // declare cards
         let declare_html = {
-            let mut declare = vec![];
+            let mut declare_html = vec![];
             for i in 0..config.head_num() {
-                declare.push(
-                    config
-                        .all_sort()
-                        .into_iter()
-                        .enumerate()
-                        .filter_map(|(j, s)| if self.declare[i][j] { Some(s) } else { None })
-                        .collect(),
-                );
+                let callback = ctx.link().callback(move |_: MouseEvent| MoveMsg::Toggle(i));
+                let card_select = html! {
+                    <button onclick={callback}> {if self.declare[i] {"t"} else {"f"}} </button>
+                };
+                declare_html.push(card_select);
             }
-            html! {<button onclick={Callback::from(move |_: MouseEvent| {
-                callback.emit(Move::Declare { declare: declare.clone() });
-            })}> {"declare"} </button>}
+
+            let declare: HashSet<_> = self
+                .declare
+                .iter()
+                .enumerate()
+                .filter_map(|(i, b)| if *b { Some(Card(i)) } else { None })
+                .collect();
+            let onclick = Callback::from(move |_: MouseEvent| {
+                callback.emit(Move::Declare {
+                    declare: declare.clone(),
+                })
+            });
+            declare_html.push(html! {<button onclick={onclick}> {"declare"} </button>});
+            declare_html
         };
 
         html! {
             <>
                 {for other_player_htmls.into_iter().flatten() }
-                {for deduction_html.into_iter().flatten()}
                 {declare_html}
             </>
         }
     }
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            MoveMsg::Toggle(i, j) => {
-                self.declare[i][j] = !self.declare[i][j];
+            MoveMsg::Toggle(i) => {
+                self.declare[i] = !self.declare[i];
                 true
             }
         }

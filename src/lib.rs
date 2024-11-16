@@ -15,12 +15,13 @@ mod tests {
         let mut rng = thread_rng();
         let mut game = GameConfig::gen_random(&config, &mut rng);
         assert_eq!(players.len(), config.player_num());
+        eprintln!("{game:?}");
         while game.is_win().is_none() {
             let player = game.player_turn();
             let agent = &mut players[player];
             let info = game.info_and_move_now();
             let m = agent.use_info(info.0, info.1);
-            eprintln!("{m:?}");
+            eprintln!("{player:?} {m:?}");
             if !game.move_game(m) {
                 panic!("有効でない move を返した！")
             }

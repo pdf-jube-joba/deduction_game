@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::{defs::*, utils::*};
 use crate::abstract_game::{Agent, ImperfectInfoGame};
 use rand::{rngs::ThreadRng, thread_rng};
@@ -48,18 +50,13 @@ impl Agent for CUIUser {
                     query_sort: sort,
                 };
             } else if move_string == "A" {
-                let mut sorts_of_cards = vec![];
+                let mut declare = HashSet::new();
                 for _ in 0..info.config.head_num() {
                     input! {
                         n: usize,
-                        sorts: [String; n],
                     }
-                    sorts_of_cards.push(sorts);
+                    declare.insert(Card(n));
                 }
-                let declare: Vec<_> = sorts_of_cards
-                    .into_iter()
-                    .map(|sort| sort.into_iter().map(Sort).collect())
-                    .collect();
                 return Move::Declare { declare };
             }
         }
@@ -137,6 +134,7 @@ impl Agent for UseEntropyPlayer {
         }
         let who = info.player_turn();
         let distrs = info.config.all_states();
+        eprintln!("{}", distrs.len());
 
         let (_, q) = info
             .query_at()
