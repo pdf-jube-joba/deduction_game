@@ -133,8 +133,9 @@ impl Agent for UseEntropyPlayer {
             return Move::Declare { declare: answer };
         }
         let who = info.player_turn();
-        let distrs = info.config.all_states();
-        eprintln!("{}", distrs.len());
+        let distrs: Vec<_> = possible_states(info.clone()).collect();
+
+        assert!(!distrs.is_empty());
 
         let (_, q) = info
             .query_at()
@@ -165,5 +166,31 @@ impl Agent for UseEntropyPlayer {
             .unwrap();
 
         q
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Opponent<R>
+where
+    R: rand::Rng,
+{
+    Random(RandomPlayer<R>),
+    Entoropy(UseEntropyPlayer),
+}
+
+impl<R> Agent for Opponent<R>
+where
+    R: rand::Rng,
+{
+    type Game = Game;
+    fn use_info(
+        &mut self,
+        info: <Self::Game as ImperfectInfoGame>::Info,
+        possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
+    ) -> <Self::Game as ImperfectInfoGame>::Move {
+        match self {
+            Opponent::Random(p) => p.use_info(info, possible_moves),
+            Opponent::Entoropy(p) => p.use_info(info, possible_moves),
+        }
     }
 }

@@ -10,24 +10,11 @@ use gloo::timers::callback::Interval;
 use rand::{rngs::SmallRng, thread_rng, SeedableRng};
 use yew::prelude::*;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Opponent {
-    Random(RandomPlayer<rand::rngs::SmallRng>),
-    Entoropy(UseEntropyPlayer),
-}
-
-impl Agent for Opponent {
-    type Game = Game;
-    fn use_info(
-        &mut self,
-        info: <Self::Game as ImperfectInfoGame>::Info,
-        possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
-    ) -> <Self::Game as ImperfectInfoGame>::Move {
-        match self {
-            Opponent::Random(p) => p.use_info(info, possible_moves),
-            Opponent::Entoropy(p) => p.use_info(info, possible_moves),
-        }
-    }
+pub fn log<S>(s: S)
+where
+    S: AsRef<str>,
+{
+    web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(s.as_ref()))
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -40,7 +27,7 @@ struct CardViewProps {
 fn card_view(CardViewProps { config, card }: &CardViewProps) -> Html {
     let s: String = config
         .all_sort_of_card(card)
-        .into_iter()
+        .iter()
         .fold(String::new(), |s, s1| format!("{s} {s1}"));
     html! {
         format!("({})", s)
@@ -104,28 +91,10 @@ impl Component for MoveView {
             };
         }
 
-        // let mut deduction_html = vec![];
-        // for i in 0..config.player_num() {
-        //     if i != as_player {
-        //         let mut htmls = vec![];
-        //         for (j, s) in config.all_sort().into_iter().enumerate() {
-        //             let snew = s.clone();
-        //             let callback = ctx
-        //                 .link()
-        //                 .callback(move |_: MouseEvent| MoveMsg::Toggle(i, j));
-        //             htmls.push(html! {
-        //                 <button onclick={callback}> {format!("{snew}: {}", if self.declare[i][j] {"t"} else {"f"})} </button>
-        //             });
-        //         }
-        //         htmls.push(html! {<br/>});
-        //         deduction_html.push(htmls);
-        //     }
-        // }
-
         // declare cards
         let declare_html = {
             let mut declare_html = vec![];
-            for i in 0..config.head_num() {
+            for i in 0..config.cards_num() {
                 let callback = ctx.link().callback(move |_: MouseEvent| MoveMsg::Toggle(i));
                 let card_select = html! {
                     <button onclick={callback}> {if self.declare[i] {"t"} else {"f"}} </button>
@@ -144,7 +113,8 @@ impl Component for MoveView {
                     declare: declare.clone(),
                 })
             });
-            declare_html.push(html! {<button onclick={onclick}> {"declare"} </button>});
+            declare_html
+                .push(html! {<> <button onclick={onclick}> {"declare"} </button> <br/> </>});
             declare_html
         };
 
@@ -182,11 +152,11 @@ fn history_view(HistoryProps { history }: &HistoryProps) -> Html {
                     ans,
                 } => html! {<>
                     {format!("Q: {query_to} {query_sort}")} <br/>
-                    {format!(" A: {ans}")}
+                    {format!(" A: {ans}")} <br/>
                 </>},
                 MoveAns::Declare { declare, ans } => html! {<>
                     {format!("Q: {declare:?} ")} <br/>
-                    {format!(" A: {ans}")}
+                    {format!(" A: {ans}")} <br/>
                 </>},
             };
 
@@ -206,7 +176,7 @@ fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
     let hand: Vec<Html> = {
         let mut h: Vec<_> = vec![html! {"hand: "}];
         for c in &view.hand {
-            h.push(html! {<CardView config={config.clone()} card={c.clone()}/>});
+            h.push(html! {<CardView config={config.clone()} card={*c}/>});
         }
         h.push(html! {<br/>});
         h
@@ -232,8 +202,7 @@ fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
 
 struct GameApp {
     game: Game,
-    other_players: Vec<Option<Opponent>>,
-    movable: bool,
+    other_players: Vec<Option<Opponent<rand::rngs::SmallRng>>>,
     interval: Interval,
 }
 
@@ -247,11 +216,15 @@ enum GameMsg {
 struct GameProps {
     config: GameConfig,
     as_player: Player,
-    players: Vec<Option<Opponent>>,
+    players: Vec<Option<Opponent<rand::rngs::SmallRng>>>,
 }
 
 impl GameProps {
-    fn new(config: GameConfig, as_player: Player, players: Vec<Option<Opponent>>) -> Option<Self> {
+    fn new(
+        config: GameConfig,
+        as_player: Player,
+        players: Vec<Option<Opponent<rand::rngs::SmallRng>>>,
+    ) -> Option<Self> {
         if config.player_num() != players.len() {
             return None;
         }
@@ -284,7 +257,6 @@ impl Component for GameApp {
         Self {
             game: config.gen_random(&mut thread_rng()),
             other_players: players.clone(),
-            movable: *as_player == 0,
             interval: Interval::new(1000, move || callback.emit(())),
         }
     }
@@ -331,9 +303,13 @@ impl Component for GameApp {
             players: _,
         } = ctx.props();
         let who_turn = self.game.player_turn();
+        log(format!("{msg:?} {who_turn} {as_player}"));
         match msg {
             GameMsg::Move(m) if who_turn == *as_player => {
-                self.game.move_game(m);
+                let b = self.game.move_game(m);
+                if !b {
+                    log("有効でない")
+                }
             }
             GameMsg::OtherMove if who_turn != *as_player => {
                 let p = self.other_players[who_turn].as_mut().unwrap();
@@ -341,9 +317,7 @@ impl Component for GameApp {
                 let m = p.use_info(info.0, info.1);
                 self.game.move_game(m);
             }
-            _ => {
-                return false;
-            }
+            _ => {}
         }
         true
     }
