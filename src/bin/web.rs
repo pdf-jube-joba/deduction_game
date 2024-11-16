@@ -202,7 +202,7 @@ fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
 
 struct GameApp {
     game: Game,
-    other_players: Vec<Option<Opponent<rand::rngs::SmallRng>>>,
+    other_players: Vec<Option<Opponent>>,
     interval: Interval,
 }
 
@@ -216,14 +216,16 @@ enum GameMsg {
 struct GameProps {
     config: GameConfig,
     as_player: Player,
-    players: Vec<Option<Opponent<rand::rngs::SmallRng>>>,
+    #[cfg(target_family = "wasm")]
+    players: Vec<Option<Opponent>>,
 }
 
+#[cfg(target_family = "wasm")]
 impl GameProps {
     fn new(
         config: GameConfig,
         as_player: Player,
-        players: Vec<Option<Opponent<rand::rngs::SmallRng>>>,
+        players: Vec<Option<Opponent>>,
     ) -> Option<Self> {
         if config.player_num() != players.len() {
             return None;
@@ -244,6 +246,7 @@ impl GameProps {
     }
 }
 
+#[cfg(target_family = "wasm")]
 impl Component for GameApp {
     type Message = GameMsg;
     type Properties = GameProps;
@@ -324,21 +327,24 @@ impl Component for GameApp {
 }
 
 fn main() {
-    let document = gloo::utils::document();
-    let target_element = document.get_element_by_id("main").unwrap();
-    let props = GameProps::new(
-        default_config(),
-        0,
-        vec![
-            None,
-            Some(Opponent::Random(
-                RandomPlayer::new(SmallRng::from_entropy()),
-            )),
-            Some(Opponent::Random(
-                RandomPlayer::new(SmallRng::from_entropy()),
-            )),
-        ],
-    )
-    .unwrap();
-    yew::Renderer::<GameApp>::with_root_and_props(target_element, props).render();
+    #[cfg(target_family = "wasm")]
+    {
+        let document = gloo::utils::document();
+        let target_element = document.get_element_by_id("main").unwrap();
+        let props = GameProps::new(
+            default_config(),
+            0,
+            vec![
+                None,
+                Some(Opponent::RandomSmallRng(
+                    RandomPlayer::new(SmallRng::from_entropy()),
+                )),
+                Some(Opponent::RandomSmallRng(
+                    RandomPlayer::new(SmallRng::from_entropy()),
+                )),
+            ],
+        )
+        .unwrap();
+        yew::Renderer::<GameApp>::with_root_and_props(target_element, props).render();
+    }
 }

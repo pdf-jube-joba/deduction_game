@@ -2,7 +2,10 @@ use std::collections::HashSet;
 
 use super::{defs::*, utils::*};
 use crate::abstract_game::{Agent, ImperfectInfoGame};
-use rand::{rngs::ThreadRng, thread_rng};
+use rand::{
+    rngs::{SmallRng, ThreadRng},
+    thread_rng,
+};
 
 #[derive(Debug, Clone)]
 #[cfg(target_arch = "x86_64")]
@@ -169,19 +172,17 @@ impl Agent for UseEntropyPlayer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Opponent<R>
-where
-    R: rand::Rng,
-{
-    Random(RandomPlayer<R>),
+#[derive(Debug, Clone)]
+#[cfg_attr(target_family = "wasm", derive(PartialEq))]
+pub enum Opponent {
     Entoropy(UseEntropyPlayer),
+    #[cfg(target_arch = "x86_64")]
+    RandomThreadRng(RandomPlayer<ThreadRng>),
+    #[cfg(target_family = "wasm")]
+    RandomSmallRng(RandomPlayer<SmallRng>),
 }
 
-impl<R> Agent for Opponent<R>
-where
-    R: rand::Rng,
-{
+impl Agent for Opponent {
     type Game = Game;
     fn use_info(
         &mut self,
@@ -189,8 +190,11 @@ where
         possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         match self {
-            Opponent::Random(p) => p.use_info(info, possible_moves),
             Opponent::Entoropy(p) => p.use_info(info, possible_moves),
+            #[cfg(target_arch = "x86_64")]
+            Opponent::RandomThreadRng(p) => p.use_info(info, possible_moves),
+            #[cfg(target_family = "wasm")]
+            Opponent::RandomSmallRng(p) => p.use_info(info, possible_moves),
         }
     }
 }
