@@ -259,6 +259,7 @@ struct SettingSceneProps {
 #[derive(Debug, Clone, PartialEq)]
 enum SettingSceneMsg {
     ChangeStrategy(usize, WebOpponent),
+    PlayAsThis(usize),
     OnEnd,
 }
 
@@ -284,19 +285,33 @@ impl Component for SettingScene {
         } = ctx.props().clone();
         let mut h: Vec<Html> = vec![];
         for i in 0..config.player_num() {
-            for m in all_strategy() {
+            if i == self.play_setting.as_player {
+                h.push(html! { {"player"} })
+            } else {
+                h.push(html! { {format!("p({i})")} });
+                for m in all_strategy() {
+                    let onclick = ctx
+                        .link()
+                        .callback(move |_: MouseEvent| SettingSceneMsg::ChangeStrategy(i, m));
+                    let b = if Some(m) == self.play_setting.opponent_strategy[i] {
+                        "t"
+                    } else {
+                        "f"
+                    };
+                    h.push(html! {
+                        <button onclick={onclick}> {map_strategy_name(m)} {format!("--{b}")} </button>
+                    });
+                }
                 let onclick = ctx
                     .link()
-                    .callback(move |_: MouseEvent| SettingSceneMsg::ChangeStrategy(i, m));
-                h.push(html! {
-                    <button onclick={onclick}> {map_strategy_name(m)} </button>
-                });
+                    .callback(move |_: MouseEvent| SettingSceneMsg::PlayAsThis(i));
+                h.push(html! { <button onclick={onclick}> {"play as this turn"} </button> })
             }
             h.push(html! {<br/>})
         }
 
         let onclick = ctx.link().callback(|_: MouseEvent| SettingSceneMsg::OnEnd);
-        h.push(html! {<button onclick={onclick}> </button>});
+        h.push(html! {<button onclick={onclick}> {"start"} </button>});
         html! { {for h} }
     }
 
@@ -308,6 +323,12 @@ impl Component for SettingScene {
             }
             SettingSceneMsg::OnEnd => {
                 ctx.props().setting_end.emit(self.play_setting.clone());
+                true
+            }
+            SettingSceneMsg::PlayAsThis(i) => {
+                let p = self.play_setting.as_player;
+                self.play_setting.opponent_strategy.swap(i, p);
+                self.play_setting.as_player = i;
                 true
             }
         }
