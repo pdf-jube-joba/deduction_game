@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use game::{
     abstract_game::{Agent, ImperfectInfoGame, Player},
     agent::*,
@@ -8,6 +6,7 @@ use game::{
 };
 use gloo::timers::callback::Interval;
 use rand::{rngs::SmallRng, thread_rng, SeedableRng};
+use std::collections::HashSet;
 use yew::prelude::*;
 
 pub fn log<S>(s: S)
@@ -110,7 +109,7 @@ impl Component for MoveView {
                 .collect();
             let onclick = Callback::from(move |_: MouseEvent| {
                 callback.emit(Move::Declare {
-                    declare: declare.clone(),
+                    declare: declare.iter().cloned().collect(),
                 })
             });
             declare_html
@@ -200,76 +199,192 @@ fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
     }
 }
 
-struct GameApp {
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum WebOpponent {
+    Random,
+    Entropy,
+}
+
+fn all_strategy() -> Vec<WebOpponent> {
+    vec![WebOpponent::Random, WebOpponent::Entropy]
+}
+
+fn map_opp(m: WebOpponent) -> Opponent {
+    match m {
+        WebOpponent::Random => {
+            Opponent::RandomSmallRng(RandomPlayer::new(SmallRng::from_entropy()))
+        }
+        WebOpponent::Entropy => Opponent::Entoropy(UseEntropyPlayer::default()),
+    }
+}
+
+fn map_strategy_name(m: WebOpponent) -> String {
+    match m {
+        WebOpponent::Random => "Random".to_string(),
+        WebOpponent::Entropy => "Entropy".to_string(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct PlaySetting {
+    as_player: Player,
+    opponent_strategy: Vec<Option<WebOpponent>>,
+}
+
+impl PlaySetting {
+    fn new(config: &GameConfig) -> Self {
+        let mut opponent_strategy = vec![None; config.player_num()];
+        for i in 1..config.player_num() {
+            opponent_strategy[i] = Some(WebOpponent::Random);
+        }
+        PlaySetting {
+            as_player: 0,
+            opponent_strategy,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct SettingScene {
+    play_setting: PlaySetting,
+}
+
+#[derive(Debug, Clone, PartialEq, Properties)]
+struct SettingSceneProps {
+    config: GameConfig,
+    change_gameconfig: Callback<GameConfig>,
+    setting_end: Callback<PlaySetting>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum SettingSceneMsg {
+    ChangeStrategy(usize, WebOpponent),
+    OnEnd,
+}
+
+impl Component for SettingScene {
+    type Message = SettingSceneMsg;
+    type Properties = SettingSceneProps;
+    fn create(ctx: &Context<Self>) -> Self {
+        let SettingSceneProps {
+            config,
+            change_gameconfig,
+            setting_end,
+        } = ctx.props();
+        Self {
+            play_setting: PlaySetting::new(config),
+        }
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let SettingSceneProps {
+            config,
+            change_gameconfig,
+            setting_end,
+        } = ctx.props().clone();
+        let mut h: Vec<Html> = vec![];
+        for i in 0..config.player_num() {
+            for m in all_strategy() {
+                let onclick = ctx
+                    .link()
+                    .callback(move |_: MouseEvent| SettingSceneMsg::ChangeStrategy(i, m));
+                h.push(html! {
+                    <button onclick={onclick}> {map_strategy_name(m)} </button>
+                });
+            }
+            h.push(html! {<br/>})
+        }
+
+        let onclick = ctx.link().callback(|_: MouseEvent| SettingSceneMsg::OnEnd);
+        h.push(html! {<button onclick={onclick}> </button>});
+        html! { {for h} }
+    }
+
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            SettingSceneMsg::ChangeStrategy(i, s) => {
+                self.play_setting.opponent_strategy[i] = Some(s);
+                true
+            }
+            SettingSceneMsg::OnEnd => {
+                ctx.props().setting_end.emit(self.play_setting.clone());
+                true
+            }
+        }
+    }
+}
+
+struct GameScene {
     game: Game,
+    as_player: usize,
     other_players: Vec<Option<Opponent>>,
+    #[allow(unused)]
     interval: Interval,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum GameMsg {
+enum GameSceneMsg {
     Move(Move),
     OtherMove,
 }
 
 #[derive(Clone, PartialEq, Properties)]
-struct GameProps {
+struct GameSceneProps {
     config: GameConfig,
-    as_player: Player,
-    #[cfg(target_family = "wasm")]
-    players: Vec<Option<Opponent>>,
+    play_setting: PlaySetting,
 }
 
-#[cfg(target_family = "wasm")]
-impl GameProps {
-    fn new(
-        config: GameConfig,
-        as_player: Player,
-        players: Vec<Option<Opponent>>,
-    ) -> Option<Self> {
-        if config.player_num() != players.len() {
+impl GameSceneProps {
+    fn new(config: GameConfig, play_setting: PlaySetting) -> Option<Self> {
+        let PlaySetting {
+            as_player,
+            opponent_strategy,
+        } = &play_setting;
+        if config.player_num() != opponent_strategy.len() {
             return None;
         }
-        for (i, v) in players.iter().enumerate() {
-            if i == as_player && players[i].is_some() {
+        for (i, v) in opponent_strategy.iter().enumerate() {
+            if i == *as_player && opponent_strategy[i].is_some() {
                 return None;
             }
-            if i != as_player && players[i].is_none() {
+            if i != *as_player && opponent_strategy[i].is_none() {
                 return None;
             }
         }
         Some(Self {
             config,
-            as_player,
-            players,
+            play_setting,
         })
     }
 }
 
-#[cfg(target_family = "wasm")]
-impl Component for GameApp {
-    type Message = GameMsg;
-    type Properties = GameProps;
+impl Component for GameScene {
+    type Message = GameSceneMsg;
+    type Properties = GameSceneProps;
     fn create(ctx: &Context<Self>) -> Self {
-        let GameProps {
+        let GameSceneProps {
             config,
-            players,
-            as_player,
+            play_setting,
         } = ctx.props();
-        let callback = ctx.link().callback(|_| GameMsg::OtherMove);
+        let callback = ctx.link().callback(|_| GameSceneMsg::OtherMove);
+        let other_players = play_setting
+            .opponent_strategy
+            .iter()
+            .map(|o| o.as_ref().map(|o| map_opp(*o)))
+            .collect();
         Self {
             game: config.gen_random(&mut thread_rng()),
-            other_players: players.clone(),
+            as_player: play_setting.as_player,
+            other_players,
             interval: Interval::new(1000, move || callback.emit(())),
         }
     }
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let GameProps {
+        let GameSceneProps {
             config,
-            players: _,
-            as_player,
+            play_setting: _,
         } = ctx.props();
-        let move_callback = ctx.link().callback(GameMsg::Move);
+        let move_callback = ctx.link().callback(GameSceneMsg::Move);
         let win = if let Some(p) = self.game.is_win() {
             html! {{format!("win: {p:?}")}}
         } else {
@@ -289,6 +404,8 @@ impl Component for GameApp {
             view,
         } = self.game.info_and_move_now().0;
 
+        let as_player = self.as_player;
+
         html! {
             <>
             {"cards:"} {for all_card} <br/>
@@ -300,21 +417,17 @@ impl Component for GameApp {
         }
     }
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
-        let GameProps {
-            config: _,
-            as_player,
-            players: _,
-        } = ctx.props();
+        let as_player = self.as_player;
         let who_turn = self.game.player_turn();
         log(format!("{msg:?} {who_turn} {as_player}"));
         match msg {
-            GameMsg::Move(m) if who_turn == *as_player => {
+            GameSceneMsg::Move(m) if who_turn == as_player => {
                 let b = self.game.move_game(m);
                 if !b {
                     log("有効でない")
                 }
             }
-            GameMsg::OtherMove if who_turn != *as_player => {
+            GameSceneMsg::OtherMove if who_turn != as_player => {
                 let p = self.other_players[who_turn].as_mut().unwrap();
                 let info = self.game.info_and_move_now();
                 let m = p.use_info(info.0, info.1);
@@ -326,25 +439,70 @@ impl Component for GameApp {
     }
 }
 
-fn main() {
-    #[cfg(target_family = "wasm")]
-    {
-        let document = gloo::utils::document();
-        let target_element = document.get_element_by_id("main").unwrap();
-        let props = GameProps::new(
-            default_config(),
-            0,
-            vec![
-                None,
-                Some(Opponent::RandomSmallRng(
-                    RandomPlayer::new(SmallRng::from_entropy()),
-                )),
-                Some(Opponent::RandomSmallRng(
-                    RandomPlayer::new(SmallRng::from_entropy()),
-                )),
-            ],
-        )
-        .unwrap();
-        yew::Renderer::<GameApp>::with_root_and_props(target_element, props).render();
+enum Scene {
+    Setting,
+    Game,
+}
+
+struct App {
+    config: GameConfig,
+    play_setting: PlaySetting,
+    scene: Scene,
+}
+
+#[derive(Debug, Clone, PartialEq, Properties)]
+struct Props {}
+
+enum Msg {
+    SettingChange(GameConfig),
+    GameStart(PlaySetting),
+}
+
+impl Component for App {
+    type Message = Msg;
+    type Properties = Props;
+    fn create(ctx: &Context<Self>) -> Self {
+        Self {
+            config: default_config(),
+            scene: Scene::Setting,
+            play_setting: PlaySetting::new(&default_config()),
+        }
     }
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        match &self.scene {
+            Scene::Setting => {
+                let change_gameconfig = ctx
+                    .link()
+                    .callback(|config: GameConfig| Msg::SettingChange(config));
+                let setting_end = ctx.link().callback(Msg::GameStart);
+                html! {
+                    <SettingScene config={self.config.clone()} change_gameconfig={change_gameconfig} setting_end={setting_end}/>
+                }
+            }
+            Scene::Game => {
+                html! {
+                    <GameScene config={self.config.clone()} play_setting={self.play_setting.clone()} />
+                }
+            }
+        }
+    }
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            Msg::SettingChange(game_config) => {
+                self.config = game_config;
+                true
+            }
+            Msg::GameStart(p) => {
+                self.play_setting = p;
+                self.scene = Scene::Game;
+                true
+            }
+        }
+    }
+}
+
+fn main() {
+    let document = gloo::utils::document();
+    let target_element = document.get_element_by_id("main").unwrap();
+    yew::Renderer::<App>::with_root_and_props(target_element, Props {}).render();
 }

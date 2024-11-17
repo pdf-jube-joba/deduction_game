@@ -1,6 +1,9 @@
 use crate::abstract_game::{self, Player};
 use itertools::Itertools;
-use std::{collections::HashSet, fmt::Display};
+use std::{
+    collections::{BTreeSet, HashSet},
+    fmt::Display,
+};
 
 // type of sort
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -144,10 +147,21 @@ impl GameConfig {
         let all_states = self.all_states();
         let ind = rng.gen_range(0..all_states.len());
         let distr = all_states.into_iter().nth(ind).unwrap();
+        let mut player_moves = vec![];
+        for i in 0..self.player_num() {
+            player_moves.push(
+                all_query(self)
+                    .filter(
+                        |m| !matches!(m, Move::Query { query_to, query_sort: _ } if *query_to == i),
+                    )
+                    .collect(),
+            );
+        }
         Game {
             config: self.clone(),
             distr,
             query_answer: vec![],
+            player_moves,
         }
     }
 }
@@ -179,13 +193,13 @@ impl Distr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Move {
     Query { query_to: Player, query_sort: Sort }, // 同じ質問はできない。
-    Declare { declare: HashSet<Card> },           // 全てのソートについて回答している必要がある。
+    Declare { declare: Vec<Card> },               // 全てのソートについて回答している必要がある。
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MoveAns {
     Query {
         query_to: Player,
@@ -193,7 +207,7 @@ pub enum MoveAns {
         ans: usize,
     },
     Declare {
-        declare: HashSet<Card>,
+        declare: Vec<Card>,
         ans: bool,
     },
 }
@@ -210,7 +224,7 @@ impl MoveAns {
                 query_sort: query_sort.clone(),
             },
             MoveAns::Declare { declare, ans: _ } => Move::Declare {
-                declare: declare.clone(),
+                declare: declare.to_vec(),
             },
         }
     }
@@ -232,7 +246,7 @@ pub fn answer(config: &GameConfig, distr: &Distr, m: Move, who: Player) -> MoveA
         }
         Move::Declare { declare } => {
             let player_head = distr.players_head(who);
-            let b = declare == *player_head;
+            let b = declare.iter().cloned().collect::<HashSet<_>>() == *player_head;
             MoveAns::Declare { declare, ans: b }
         }
     }
@@ -252,6 +266,7 @@ pub struct Game {
     config: GameConfig,
     distr: Distr,
     query_answer: Vec<MoveAns>,
+    player_moves: Vec<BTreeSet<Move>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -326,6 +341,7 @@ impl abstract_game::ImperfectInfoGame for Game {
         if self.is_win().is_some() {
             return (info, vec![]);
         }
+
         let m = info
             .query_at()
             .into_iter()

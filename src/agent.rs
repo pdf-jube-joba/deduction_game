@@ -60,7 +60,9 @@ impl Agent for CUIUser {
                     }
                     declare.insert(Card(n));
                 }
-                return Move::Declare { declare };
+                return Move::Declare {
+                    declare: declare.into_iter().collect(),
+                };
             }
         }
     }
@@ -102,7 +104,9 @@ where
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         // answerable なとき
         if let Some(answer) = answerable(info.clone()) {
-            return Move::Declare { declare: answer };
+            return Move::Declare {
+                declare: answer.into_iter().collect(),
+            };
         }
         let possible_moves = info.query_at();
         if possible_moves.is_empty() {
@@ -133,7 +137,9 @@ impl Agent for UseEntropyPlayer {
         _possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         if let Some(answer) = answerable(info.clone()) {
-            return Move::Declare { declare: answer };
+            return Move::Declare {
+                declare: answer.into_iter().collect(),
+            };
         }
         let who = info.player_turn();
         let distrs: Vec<_> = possible_states(info.clone()).collect();
@@ -172,13 +178,34 @@ impl Agent for UseEntropyPlayer {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchPlayer {
+    depth: usize,
+}
+
+pub fn search_depth(info: &Info) -> Move {
+    let mut player_move = vec![];
+    for i in info.config.all_player() {
+        let s: HashSet<_> = info
+            .query_answer
+            .iter()
+            .skip(i)
+            .cloned()
+            .step_by(info.config.player_num())
+            .collect();
+        player_move.push(s);
+    }
+    let possible_distr: Vec<_> = possible_states(info.clone()).collect();
+    // let mut used = vec![];
+    todo!()
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(target_family = "wasm", derive(PartialEq))]
 pub enum Opponent {
     Entoropy(UseEntropyPlayer),
     #[cfg(target_arch = "x86_64")]
     RandomThreadRng(RandomPlayer<ThreadRng>),
-    #[cfg(target_family = "wasm")]
     RandomSmallRng(RandomPlayer<SmallRng>),
 }
 
@@ -193,7 +220,6 @@ impl Agent for Opponent {
             Opponent::Entoropy(p) => p.use_info(info, possible_moves),
             #[cfg(target_arch = "x86_64")]
             Opponent::RandomThreadRng(p) => p.use_info(info, possible_moves),
-            #[cfg(target_family = "wasm")]
             Opponent::RandomSmallRng(p) => p.use_info(info, possible_moves),
         }
     }

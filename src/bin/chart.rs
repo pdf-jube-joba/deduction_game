@@ -6,10 +6,7 @@ use indicatif::ProgressBar;
 use plotters::prelude::*;
 use rand::thread_rng;
 
-fn test_player_with_config<R>(config: GameConfig, mut players: Vec<Opponent<R>>) -> usize
-where
-    R: rand::Rng,
-{
+fn test_player_with_config(config: GameConfig, mut players: Vec<Opponent>) -> usize {
     let mut rng = thread_rng();
     let mut game = GameConfig::gen_random(&config, &mut rng);
     assert_eq!(players.len(), config.player_num());
@@ -33,9 +30,9 @@ where
 const LOOP: usize = 500;
 
 fn main() {
-    let ps: Vec<Opponent<_>> = vec![
+    let ps: Vec<Opponent> = vec![
         // Opponent::Random(RandomPlayer::new(SmallRng::from_entropy())),
-        Opponent::Random(RandomPlayer::default()),
+        Opponent::RandomThreadRng(RandomPlayer::default()),
         Opponent::Entoropy(UseEntropyPlayer::default()),
     ];
 
@@ -54,8 +51,8 @@ fn main() {
 
                 bar.finish();
 
-                let p = |opp: &Opponent<_>| {
-                    if matches!(opp, Opponent::Random(_)) {
+                let p = |opp: &Opponent| {
+                    if matches!(opp, Opponent::RandomThreadRng(_)) {
                         "random"
                     } else {
                         "entropy"
