@@ -5,6 +5,7 @@ use game::{
     utils::default_config,
 };
 use gloo::timers::callback::Interval;
+use itertools::Itertools;
 use rand::{rngs::SmallRng, thread_rng, SeedableRng};
 use std::collections::HashSet;
 use yew::prelude::*;
@@ -27,9 +28,12 @@ fn card_view(CardViewProps { config, card }: &CardViewProps) -> Html {
     let s: String = config
         .all_sort_of_card(card)
         .iter()
-        .fold(String::new(), |s, s1| format!("{s} {s1}"));
+        .map(|s| format!("{s}"))
+        .join(" ");
     html! {
-        format!("({})", s)
+        <span class={classes!("card")}>
+        {format!("{}", s)}
+        </span>
     }
 }
 
@@ -244,16 +248,74 @@ impl PlaySetting {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Properties)]
+struct GameConfigProps {
+    config: GameConfig,
+}
+
+#[function_component(GameConfigView)]
+fn gameconfig_view(GameConfigProps { config }: &GameConfigProps) -> Html {
+    let all_cards: Html = config
+        .all_cards()
+        .into_iter()
+        .map(|c| {
+            html! {
+                html!{
+                    <CardView config={config.clone()} card={c} />
+                }
+            }
+        })
+        .collect();
+    html! {
+        <div id="setting" class={classes!("roundbox")}>
+            {"game setting"}
+            {"プレイする人数："} {config.player_num()} <br/>
+            {"使うカード："} {all_cards} <br/>
+        </div>
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Properties)]
+struct GameRuleProps {
+    config: GameConfig,
+}
+
+#[function_component(GameRuleView)]
+fn gamerule_view(GameRuleProps { config }: &GameRuleProps) -> Html {
+    html! {
+        <div id="rule" class={classes!("roundbox")}>
+        <div class={classes!("smallbox")}>
+            {"このゲームはカード当てゲームです。あなたの頭にあるカードを当てましょう"}
+        </div>
+        <div class={classes!("smallbox")}>
+            {"それぞれのカードは属性をそれぞれ（複数）持っています。"} <br/>
+            {"使うカードと属性は下に書いてある通りです。"} <br/>
+            {format!("各プレイヤーは、自分の手元と頭にそれぞれ {} 枚と {} 枚のカードを持ちます。", config.hand_num(), config.head_num())} <br/>
+            {"自分の手元にあるカードは自分にしか見えません。"} <br/>
+            {"自分の頭にあるカードは他のプレイヤーにしか見えません。"} <br/>
+        </div>
+        <div class={classes!("smallbox")}>
+        {"プレイヤーは順番に次の行動をすることができます。"} <br/>
+        {"1. 自分の頭にあるカードを予想して宣言する：もしあっていたらそのプレイヤーの一人勝ちです。"} <br/>
+        {"2. 他のプレイヤーに、ある属性について、その属性を持っているカードが何枚見えるかを質問することができます。"} <br/>
+        {"行動1. と 2. はともに、その内容はほかのすべてのプレイヤーとその結果を共有することになります。"}
+        </div>
+        <div class={classes!("smallbox")}>
+        {"自分が過去にやった行動を 2 回することはできません。"}
+        </div>
+        </div>
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct SettingScene {
+    config: GameConfig,
     play_setting: PlaySetting,
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct SettingSceneProps {
-    config: GameConfig,
-    change_gameconfig: Callback<GameConfig>,
-    setting_end: Callback<PlaySetting>,
+    setting_end: Callback<(GameConfig, PlaySetting)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -267,52 +329,88 @@ impl Component for SettingScene {
     type Message = SettingSceneMsg;
     type Properties = SettingSceneProps;
     fn create(ctx: &Context<Self>) -> Self {
-        let SettingSceneProps {
-            config,
-            change_gameconfig,
-            setting_end,
-        } = ctx.props();
+        let config = default_config();
+        let play_setting = PlaySetting::new(&config);
         Self {
-            play_setting: PlaySetting::new(config),
+            config,
+            play_setting,
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let SettingSceneProps {
-            config,
-            change_gameconfig,
-            setting_end,
-        } = ctx.props().clone();
         let mut h: Vec<Html> = vec![];
-        for i in 0..config.player_num() {
+        for i in 0..self.config.player_num() {
             if i == self.play_setting.as_player {
-                h.push(html! { {"player"} })
+                h.push(html! {
+                    <tr>
+                    <th> {format!("あなた {}", i + 1)} </th>
+                    <th> {"なし"} </th>
+                    {for all_strategy().into_iter().map(|opt| html!{ <th> {"なし"} </th>})}
+                    <th> {"なし"} </th>
+                    </tr>
+                })
             } else {
-                h.push(html! { {format!("p({i})")} });
-                for m in all_strategy() {
-                    let onclick = ctx
-                        .link()
-                        .callback(move |_: MouseEvent| SettingSceneMsg::ChangeStrategy(i, m));
-                    let b = if Some(m) == self.play_setting.opponent_strategy[i] {
-                        "t"
-                    } else {
-                        "f"
-                    };
-                    h.push(html! {
-                        <button onclick={onclick}> {map_strategy_name(m)} {format!("--{b}")} </button>
-                    });
-                }
+                let strategy_change_html: Vec<Html> = {
+                    let mut h = vec![];
+                    for m in all_strategy() {
+                        let onclick = ctx
+                            .link()
+                            .callback(move |_: MouseEvent| SettingSceneMsg::ChangeStrategy(i, m));
+                        let this_or_not_class = if Some(m) == self.play_setting.opponent_strategy[i]
+                        {
+                            "t"
+                        } else {
+                            "f"
+                        };
+                        h.push(html! {
+                        <th>
+                            <button onclick={onclick} class={this_or_not_class}> {"この戦略にする"} </button>
+                        </th>
+                        });
+                    }
+                    h
+                };
                 let onclick = ctx
                     .link()
                     .callback(move |_: MouseEvent| SettingSceneMsg::PlayAsThis(i));
-                h.push(html! { <button onclick={onclick}> {"play as this turn"} </button> })
+                h.push(html! {
+                    <tr>
+                    <th> {format!("CPU（{}）", i + 1)} </th>
+                    <th> {
+                        map_strategy_name(self.play_setting.opponent_strategy[i].unwrap())
+                    } </th>
+                    {for strategy_change_html}
+                    <th> <button onclick={onclick}> {"この手番でプレイする"} </button> </th>
+                    </tr>
+                })
             }
-            h.push(html! {<br/>})
         }
 
         let onclick = ctx.link().callback(|_: MouseEvent| SettingSceneMsg::OnEnd);
-        h.push(html! {<button onclick={onclick}> {"start"} </button>});
-        html! { {for h} }
+
+        html! {
+            <>
+            <GameRuleView config={self.config.clone()}/>
+            <GameConfigView config={self.config.clone()}/>
+            <div class={classes!("roundbox")}>
+            <table>
+            <caption>
+            {"play setting"}
+            </caption>
+            <thead >
+                <tr>
+                    <th> {"プレイする順番"} </th>
+                    <th> {"とる戦略"} </th>
+                    {for all_strategy().into_iter().map(|opt| html!{ <th> {map_strategy_name(opt)} </th>})}
+                    <th> </th>
+                </tr>
+            </thead>
+            {for h}
+            </table>
+            </div>
+            <button onclick={onclick}> {"ゲームスタート"} </button>
+            </>
+        }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -322,7 +420,9 @@ impl Component for SettingScene {
                 true
             }
             SettingSceneMsg::OnEnd => {
-                ctx.props().setting_end.emit(self.play_setting.clone());
+                ctx.props()
+                    .setting_end
+                    .emit((self.config.clone(), self.play_setting.clone()));
                 true
             }
             SettingSceneMsg::PlayAsThis(i) => {
@@ -475,14 +575,13 @@ struct App {
 struct Props {}
 
 enum Msg {
-    SettingChange(GameConfig),
-    GameStart(PlaySetting),
+    GameStart((GameConfig, PlaySetting)),
 }
 
 impl Component for App {
     type Message = Msg;
     type Properties = Props;
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self {
             config: default_config(),
             scene: Scene::Setting,
@@ -492,12 +591,9 @@ impl Component for App {
     fn view(&self, ctx: &Context<Self>) -> Html {
         match &self.scene {
             Scene::Setting => {
-                let change_gameconfig = ctx
-                    .link()
-                    .callback(|config: GameConfig| Msg::SettingChange(config));
                 let setting_end = ctx.link().callback(Msg::GameStart);
                 html! {
-                    <SettingScene config={self.config.clone()} change_gameconfig={change_gameconfig} setting_end={setting_end}/>
+                    <SettingScene setting_end={setting_end}/>
                 }
             }
             Scene::Game => {
@@ -507,14 +603,11 @@ impl Component for App {
             }
         }
     }
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::SettingChange(game_config) => {
-                self.config = game_config;
-                true
-            }
-            Msg::GameStart(p) => {
-                self.play_setting = p;
+            Msg::GameStart((config, play_setting)) => {
+                self.config = config;
+                self.play_setting = play_setting;
                 self.scene = Scene::Game;
                 true
             }

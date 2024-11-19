@@ -1,0 +1,30 @@
+div.roundbox {
+    margin: 10pt;
+    border: solid black 3pt ;
+    border-radius: 5pt;
+}
+
+div.smallbox {
+    border: solid aqua 1pt ;
+    border-radius: 3pt;
+}
+
+span.card {
+    border: solid #999 1pt ;
+    border-radius: 3pt;
+    margin: 4pt;
+}
+
+table {
+    padding: 10pt;
+}
+
+caption {
+    caption-side: top;
+    padding: 10px;
+}
+
+thead,
+tfoot {
+  background-color: rgb(200, 200, 200);
+}
