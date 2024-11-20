@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::{defs::*, utils::*};
 use crate::abstract_game::{Agent, ImperfectInfoGame};
@@ -105,9 +105,7 @@ where
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         // answerable なとき
         if let Some(answer) = answerable(info.clone()) {
-            return Move::Declare {
-                declare: answer.into_iter().collect(),
-            };
+            return answer;
         }
         let possible_moves = info.movable_query();
         if possible_moves.is_empty() {
@@ -138,22 +136,22 @@ impl Agent for UseEntropyPlayer {
         _possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         if let Some(answer) = answerable(info.clone()) {
-            return Move::Declare {
-                declare: answer.into_iter().collect(),
-            };
+            return answer;
         }
         let who = info.player_turn();
         let distrs: Vec<_> = possible_states(info.clone()).collect();
 
         assert!(!distrs.is_empty());
 
-        let (_, q) = info
+        if let Some((_, q)) = info
             .movable_query()
             .into_iter()
-            .map(|q| {
+            .filter_map(|q| {
                 let mut distribution = vec![0; info.config.cards_num()];
+
                 for distr in &distrs {
                     let MoveAns::Query {
+                        who: _,
                         query_to: _,
                         query_sort: _,
                         ans,
@@ -163,19 +161,45 @@ impl Agent for UseEntropyPlayer {
                     };
                     distribution[ans] += 1;
                 }
+                // この質問をして意味があるか
+                let mut k = 0;
+
                 let mut entropy: f64 = 0_f64;
                 for i in distribution {
                     if i == 0 {
                         continue;
                     }
+                    k += 1;
                     entropy += ((i as f64) / (distrs.len() as f64)) * (i as f64).log2();
                 }
-                (entropy, q)
+
+                // k > 1 なら質問をすると分類ができるが、できないものは質問しても仕方ないので選択肢から省く。
+                if k > 1 {
+                    Some((entropy, q))
+                } else {
+                    None
+                }
             })
             .min_by(|(entropy1, _), (entropy2, _)| entropy1.partial_cmp(entropy2).unwrap())
-            .unwrap();
-
-        q
+        {
+            q
+        } else {
+            // 聞けることすべて聞いて、特定ができてないケース
+            let possible_declare = info.movable_declare();
+            let mut maps: HashMap<Move, usize> = HashMap::new();
+            for distr in distrs {
+                let head = Move::Declare {
+                    declare: distr.players_head(who).clone(),
+                };
+                if !possible_declare.contains(&head) {
+                    continue;
+                }
+                let entry = maps.entry(head);
+                entry.and_modify(|i| *i += 1).or_default();
+            }
+            let (a, _) = maps.into_iter().max_by_key(|(a, n)| *n).unwrap();
+            a
+        }
     }
 }
 

@@ -153,53 +153,47 @@ impl GameConfig {
     pub fn has_sort(&self, card: &Card, sort: &Sort) -> bool {
         self.cards_sort[card.0].contains(sort)
     }
-    pub fn all_states(&self) -> Vec<Distr> {
-        self.all_cards()
-            .into_iter()
-            .permutations(self.cards_num())
-            .map(|perm| {
-                let mut state = vec![];
-                for p in 0..self.player_num {
-                    let ind = (self.head_num + self.hand_num) * p;
-                    state.push(PlCard {
-                        hand: perm[ind..ind + self.hand_num].iter().cloned().collect(),
-                        head: perm[ind + self.hand_num..ind + self.hand_num + self.head_num]
-                            .iter()
-                            .cloned()
-                            .collect(),
-                    })
-                }
-                Distr { state }
-            })
-            .collect()
-    }
     pub fn gen_random<R>(&self, rng: &mut R) -> Game
     where
         R: rand::Rng,
     {
-        let all_states = self.all_states();
-        let ind = rng.gen_range(0..all_states.len());
-        let distr = all_states.into_iter().nth(ind).unwrap();
-        let mut player_moves = vec![];
-        for i in self.all_player() {
-            player_moves.push(
-                all_query(self)
-                    .filter(
-                        |m| !matches!(m, Move::Query { query_to, query_sort: _ } if *query_to == i),
-                    )
-                    .collect(),
-            );
+        let mut perm = self.all_cards();
+        let len = perm.len();
+        for _ in 0..self.cards_num().pow(2) {
+            let i = rng.gen_range(0..len);
+            let j = rng.gen_range(0..len);
+            perm.swap(i, j);
+        }
+
+        let mut perm = perm.into_iter();
+
+        let mut perm_consume = |i: usize| -> BTreeSet<Card> {
+            let mut v = BTreeSet::new();
+            for _ in 0..i {
+                v.insert(perm.next().unwrap());
+            }
+            v
+        };
+
+        let mut state = vec![];
+        for _ in 0..self.player_num {
+            state.push(PlCard {
+                hand: perm_consume(self.hand_num),
+                head: perm_consume(self.head_num),
+            })
         }
         Game {
             config: self.clone(),
-            distr,
+            distr: Distr { state },
             query_answer: vec![],
-            player_moves,
         }
     }
 }
 
 impl Distr {
+    pub fn new(state: Vec<PlCard>) -> Self {
+        Self { state }
+    }
     pub fn players_head(&self, player: Player) -> &BTreeSet<Card> {
         let i: usize = player.into();
         &self.state[i].head
@@ -232,18 +226,20 @@ impl Distr {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Move {
     Query { query_to: Player, query_sort: Sort }, // 同じ質問はできない。
-    Declare { declare: Vec<Card> },               // 全てのソートについて回答している必要がある。
+    Declare { declare: BTreeSet<Card> },          // 全てのソートについて回答している必要がある。
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MoveAns {
     Query {
+        who: Player,
         query_to: Player,
         query_sort: Sort,
         ans: usize,
     },
     Declare {
-        declare: Vec<Card>,
+        who: Player,
+        declare: BTreeSet<Card>,
         ans: bool,
     },
 }
@@ -252,6 +248,7 @@ impl MoveAns {
     pub fn move_of_this(&self) -> Move {
         match self {
             MoveAns::Query {
+                who: _,
                 query_to,
                 query_sort,
                 ans: _,
@@ -259,8 +256,12 @@ impl MoveAns {
                 query_to: *query_to,
                 query_sort: query_sort.clone(),
             },
-            MoveAns::Declare { declare, ans: _ } => Move::Declare {
-                declare: declare.to_vec(),
+            MoveAns::Declare {
+                who: _,
+                declare,
+                ans: _,
+            } => Move::Declare {
+                declare: declare.clone(),
             },
         }
     }
@@ -275,6 +276,7 @@ pub fn answer(config: &GameConfig, distr: &Distr, m: Move, who: Player) -> MoveA
             let view = distr.cards_from_player(query_to);
             let sort_num: usize = view.sort_num(config, &query_sort);
             MoveAns::Query {
+                who,
                 query_to,
                 query_sort,
                 ans: sort_num,
@@ -283,7 +285,11 @@ pub fn answer(config: &GameConfig, distr: &Distr, m: Move, who: Player) -> MoveA
         Move::Declare { declare } => {
             let player_head = distr.players_head(who);
             let b = declare.iter().cloned().collect::<BTreeSet<_>>() == *player_head;
-            MoveAns::Declare { declare, ans: b }
+            MoveAns::Declare {
+                who,
+                declare,
+                ans: b,
+            }
         }
     }
 }
@@ -305,7 +311,6 @@ pub struct Game {
     config: GameConfig,
     distr: Distr,
     query_answer: Vec<MoveAns>,
-    player_moves: Vec<BTreeSet<Move>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -390,15 +395,15 @@ impl abstract_game::ImperfectInfoGame for Game {
         if self.query_answer.is_empty() {
             return None;
         }
-        let last_player = self.config.player_turn(self.query_answer.len() - 1);
-        let last_player: usize = last_player.into();
         let mut v = vec![0; self.player_number()];
         if let Some(MoveAns::Declare {
+            who,
             declare: _,
             ans: true,
         }) = self.query_answer.last()
         {
-            v[last_player] = 1;
+            let who: usize = (*who).into();
+            v[who] = 1;
             Some(v)
         } else {
             None

@@ -161,7 +161,7 @@ impl Component for MoveView {
                 declare_html.push(card_select);
             }
 
-            let declare: Vec<_> = self
+            let declare: BTreeSet<_> = self
                 .declare
                 .iter()
                 .enumerate()
@@ -230,23 +230,22 @@ fn history_view(
         {"行動の履歴："} <br/>
         {for history
         .iter()
-        .enumerate()
-        .map(|(i, qa)| {
-            let player = config.player_turn(i);
+        .map(|qa| {
             let h: Html = match qa {
                 MoveAns::Query {
+                    who,
                     query_to,
                     query_sort,
                     ans,
                 } => html! {<>
-                    <PlayerRepView player={player} play_setting={play_setting.clone()} />
+                    <PlayerRepView player={*who} play_setting={play_setting.clone()} />
                     {"から"}
                     <PlayerRepView player={*query_to} play_setting={play_setting.clone()} />
                     {"へ質問："}
                     {format!("{query_sort} は何枚ある？...{ans}")} <br/>
                 </>},
-                MoveAns::Declare { declare, ans } => html! {<>
-                    <PlayerRepView player={player} play_setting={play_setting.clone()} />
+                MoveAns::Declare { who, declare, ans } => html! {<>
+                    <PlayerRepView player={*who} play_setting={play_setting.clone()} />
                     {"の宣言："}
                     {format!("頭のカードは {} ... {}",
                         declare.into_iter().map(|s| format!("{}", s.0)).join("と"),
