@@ -1,7 +1,9 @@
 use itertools::Itertools;
 
+use crate::abstract_game::Player;
+
 use super::defs::*;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 pub fn default_config() -> GameConfig {
     crate::defs::GameConfig::new(
@@ -87,13 +89,11 @@ pub fn four_midium() -> GameConfig {
     .unwrap()
 }
 
-pub fn possible_states(
-    Info {
-        config,
-        query_answer,
-        view,
-    }: Info,
-) -> impl Iterator<Item = Distr> {
+pub fn possible_states<'a>(
+    config: &'a GameConfig,
+    query_answer: &'a Vec<MoveAns>,
+    view: &'a View,
+) -> impl Iterator<Item = Distr> + 'a {
     let player = config.player_turn(query_answer.len());
     let not_in_view: Vec<Card> = config
         .all_cards()
@@ -109,8 +109,8 @@ pub fn possible_states(
         .collect();
 
     let n = not_in_view.len();
-
-    let config2 = config.clone();
+    let all_player = config.all_player();
+    let (head_num, hand_num) = (config.head_num(), config.hand_num());
 
     not_in_view
         .into_iter()
@@ -127,14 +127,14 @@ pub fn possible_states(
                 v
             };
 
-            for p in config.all_player() {
+            for p in all_player.clone() {
                 let (head, hand) = if p == player {
-                    (perm_consume(config.head_num()), view.hand.clone())
+                    (perm_consume(head_num), view.hand.clone())
                 } else {
                     let p: usize = p.into();
                     (
                         view.other[p].as_ref().unwrap().clone(),
-                        perm_consume(config.hand_num()),
+                        perm_consume(hand_num),
                     )
                 };
                 state.push(PlCard { head, hand })
@@ -153,25 +153,38 @@ pub fn possible_states(
                     MoveAns::Declare { who, declare, ans } => who,
                 };
                 let m = qa.move_of_this();
-                let a = answer(&config2, distr, m, *who);
+                let a = answer(config, distr, m, *who);
                 *qa == a
             })
         })
 }
 
-pub fn answerable(
-    Info {
-        config,
-        query_answer,
-        view,
-    }: Info,
-) -> Option<Move> {
+pub fn movable_query_ref<'a>(
+    config: &'a GameConfig,
+    query_answer: &'a Vec<MoveAns>,
+    player: Player,
+) -> impl Iterator<Item = Move> + 'a {
+    let past_moves: HashSet<_> = query_answer
+        .iter()
+        .skip(player.into())
+        .step_by(config.player_num())
+        .map(|qa| qa.move_of_this())
+        .collect();
+    all_query(config).filter(move |q| {
+        !past_moves.contains(q)
+            && !matches!(
+                q,
+                Move::Query {
+                    query_to,
+                    query_sort: _
+                } if *query_to == player
+            )
+    })
+}
+
+pub fn answerable(config: &GameConfig, query_answer: &Vec<MoveAns>, view: &View) -> Option<Move> {
     let player = config.player_turn(query_answer.len());
-    let possible_distr = possible_states(Info {
-        config: config.clone(),
-        query_answer: query_answer.clone(),
-        view: view.clone(),
-    });
+    let possible_distr = possible_states(config, query_answer, view);
     let mut heads = possible_distr
         .into_iter()
         .map(|distr| distr.players_head(player).clone());
@@ -184,6 +197,16 @@ pub fn answerable(
         }
     }
     Some(Move::Declare { declare: head })
+}
+
+pub fn answerable_info(
+    Info {
+        config,
+        query_answer,
+        view,
+    }: &Info,
+) -> Option<Move> {
+    answerable(config, query_answer, view)
 }
 
 pub fn random_vec<R, T>(rng: &mut R, v: Vec<T>) -> T
@@ -207,14 +230,14 @@ mod tests {
         // eprintln!("{config:?}");
         let game = config.gen_random(&mut thread_rng());
         // eprintln!("{game:?}");
-        let info = game.info_and_move_now();
+        let info = game.info_and_move_now().0;
         // eprintln!("{info:?}");
-        let p = possible_states(info.0.clone());
+        let p = possible_states(&info.config, &info.query_answer, &info.view);
         for p in p {
             eprintln!("{:?}", p);
         }
 
-        let _ = answerable(info.0);
+        let _ = answerable(&info.config, &info.query_answer, &info.view);
 
         // let config = three_midium();
         // eprintln!("{config:?}");

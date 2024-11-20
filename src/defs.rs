@@ -16,6 +16,15 @@ impl Display for Sort {
     }
 }
 
+impl<T> From<T> for Sort
+where
+    T: AsRef<str>,
+{
+    fn from(value: T) -> Self {
+        Sort(value.as_ref().to_string())
+    }
+}
+
 /// Card(i) があるなら j < i に対して Card(j) もあること
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Card(pub usize);
@@ -263,6 +272,21 @@ impl MoveAns {
             } => Move::Declare {
                 declare: declare.clone(),
             },
+        }
+    }
+    pub fn who_move(&self) -> Player {
+        match self {
+            MoveAns::Query {
+                who,
+                query_to: _,
+                query_sort: _,
+                ans: _,
+            } => *who,
+            MoveAns::Declare {
+                who,
+                declare: _,
+                ans: _,
+            } => *who,
         }
     }
 }

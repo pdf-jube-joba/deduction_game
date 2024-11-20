@@ -301,10 +301,11 @@ fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
 enum WebOpponent {
     Random,
     Entropy,
+    Search,
 }
 
 fn all_strategy() -> Vec<WebOpponent> {
-    vec![WebOpponent::Random, WebOpponent::Entropy]
+    vec![WebOpponent::Random, WebOpponent::Entropy, WebOpponent::Search]
 }
 
 fn map_opp(m: WebOpponent) -> Opponent {
@@ -313,6 +314,7 @@ fn map_opp(m: WebOpponent) -> Opponent {
             Opponent::RandomSmallRng(RandomPlayer::new(SmallRng::from_entropy()))
         }
         WebOpponent::Entropy => Opponent::Entoropy(UseEntropyPlayer::default()),
+        WebOpponent::Search => Opponent::SearchPlayer(SearchPlayer::new(3)),
     }
 }
 
@@ -320,6 +322,7 @@ fn map_strategy_name(m: WebOpponent) -> String {
     match m {
         WebOpponent::Random => "Random".to_string(),
         WebOpponent::Entropy => "Entropy".to_string(),
+        WebOpponent::Search => "Search".to_string(),
     }
 }
 

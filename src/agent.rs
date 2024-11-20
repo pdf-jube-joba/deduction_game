@@ -104,7 +104,7 @@ where
         _possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         // answerable なとき
-        if let Some(answer) = answerable(info.clone()) {
+        if let Some(answer) = answerable_info(&info) {
             return answer;
         }
         let possible_moves = info.movable_query();
@@ -135,11 +135,12 @@ impl Agent for UseEntropyPlayer {
         info: <Self::Game as ImperfectInfoGame>::Info,
         _possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
     ) -> <Self::Game as ImperfectInfoGame>::Move {
-        if let Some(answer) = answerable(info.clone()) {
+        if let Some(answer) = answerable_info(&info) {
             return answer;
         }
         let who = info.player_turn();
-        let distrs: Vec<_> = possible_states(info.clone()).collect();
+        let distrs: Vec<_> =
+            possible_states(&info.config, &info.query_answer, &info.view).collect();
 
         assert!(!distrs.is_empty());
 
@@ -203,26 +204,103 @@ impl Agent for UseEntropyPlayer {
     }
 }
 
+pub fn search_depth(info: &Info, depth: usize) -> Option<(Move, Vec<f64>)> {
+    let mut query_answer = info.query_answer.clone();
+    let movables = info
+        .config
+        .all_player()
+        .into_iter()
+        .map(|player| movable_query_ref(&info.config, &query_answer, player).collect())
+        .collect();
+    search_rec(
+        &info.config,
+        &mut query_answer,
+        &info.view,
+        depth,
+        &movables,
+    )
+}
+
+pub fn search_rec(
+    config: &GameConfig,
+    query_answer: &mut Vec<MoveAns>,
+    view: &View,
+    depth: usize,
+    movables: &Vec<HashSet<Move>>,
+) -> Option<(Move, Vec<f64>)> {
+    if let Some(answer) = answerable(config, query_answer, view) {
+        let mut v = vec![0_f64; config.player_num()];
+        v[0] = 1_f64;
+        return Some((answer, v));
+    }
+
+    if depth == 0 {
+        None
+    } else {
+        let now_player = config.player_turn(query_answer.len());
+        let next_player = config.player_turn(query_answer.len() + 1);
+        let possible_state: Vec<_> = possible_states(config, query_answer, view).collect();
+        let state_len = possible_state.len();
+        let n: usize = next_player.into();
+        movables[n]
+            .iter()
+            .filter(|m| todo!())
+            .map(|m| {
+                let mut points = vec![0_f64; config.player_num()];
+                for distr in possible_state.clone() {
+                    let ans = answer(config, &distr, m.clone(), now_player);
+                    query_answer.push(ans);
+                    let view = distr.cards_from_player(next_player);
+                    let a = search_rec(config, query_answer, &view, depth - 1, movables);
+                    query_answer.pop();
+                    let Some((_, mut point)) = a else {
+                        continue;
+                    };
+                    point.rotate_right(1);
+                    for i in 0..config.player_num() {
+                        points[i] += point[i] / state_len as f64;
+                    }
+                }
+                (m, points)
+            })
+            .max_by(|m1, m2| {
+                if m1.1[0] < m2.1[0] {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Greater
+                }
+            })
+            .map(|(m, p)| (m.clone(), p))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchPlayer {
     depth: usize,
 }
 
-pub fn search_depth(info: &Info) -> Move {
-    // let mut player_move = vec![];
-    // for i in info.config.all_player() {
-    //     let s: HashSet<_> = info
-    //         .query_answer
-    //         .iter()
-    //         .skip(i)
-    //         .cloned()
-    //         .step_by(info.config.player_num())
-    //         .collect();
-    //     player_move.push(s);
-    // }
-    // let possible_distr: Vec<_> = possible_states(info.clone()).collect();
-    // let mut used = vec![];
-    todo!()
+impl SearchPlayer {
+    // depth >= 5 はあまりにも時間を使うので危険
+    pub fn new(depth: usize) -> SearchPlayer {
+        SearchPlayer { depth }
+    }
+}
+
+impl Agent for SearchPlayer {
+    type Game = Game;
+    fn use_info(
+        &mut self,
+        info: <Self::Game as ImperfectInfoGame>::Info,
+        possible_moves: Vec<<Self::Game as ImperfectInfoGame>::Move>,
+    ) -> <Self::Game as ImperfectInfoGame>::Move {
+        if let Some(answer) = answerable_info(&info) {
+            return answer;
+        }
+        if let Some((m, _)) = search_depth(&info, self.depth) {
+            return m;
+        }
+        possible_moves.into_iter().nth(0).unwrap()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -232,6 +310,7 @@ pub enum Opponent {
     #[cfg(target_arch = "x86_64")]
     RandomThreadRng(RandomPlayer<ThreadRng>),
     RandomSmallRng(RandomPlayer<SmallRng>),
+    SearchPlayer(SearchPlayer),
 }
 
 impl Agent for Opponent {
@@ -246,6 +325,32 @@ impl Agent for Opponent {
             #[cfg(target_arch = "x86_64")]
             Opponent::RandomThreadRng(p) => p.use_info(info, possible_moves),
             Opponent::RandomSmallRng(p) => p.use_info(info, possible_moves),
+            Opponent::SearchPlayer(p) => p.use_info(info, possible_moves),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a() {
+        let config = default_config();
+        let mut game = config.gen_random(&mut thread_rng());
+        game.move_game(Move::Query {
+            query_to: 1.into(),
+            query_sort: "A".into(),
+        });
+        game.move_game(Move::Query {
+            query_to: 2.into(),
+            query_sort: "A".into(),
+        });
+        game.move_game(Move::Query {
+            query_to: 2.into(),
+            query_sort: "B".into(),
+        });
+        let info = game.info_and_move_now();
+        let a = search_depth(&info.0, 3);
+        eprintln!("{a:?}")
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use game::abstract_game::*;
-use game::agent::{Opponent, RandomPlayer, UseEntropyPlayer};
+use game::agent::{Opponent, RandomPlayer, SearchPlayer, UseEntropyPlayer};
 use game::defs::GameConfig;
 use game::utils::{default_config, four_midium, three_midium};
 use indicatif::ProgressBar;
@@ -59,20 +59,20 @@ fn main() {
         // Opponent::Random(RandomPlayer::new(SmallRng::from_entropy())),
         Opponent::RandomThreadRng(RandomPlayer::default()),
         Opponent::Entoropy(UseEntropyPlayer::default()),
+        Opponent::SearchPlayer(SearchPlayer::new(3)),
     ];
 
-    let config = four_midium();
+    let config = default_config();
     let num = config.player_num();
 
     for players in rec(num, &ps) {
         let print = |opp: &Vec<Opponent>| -> String {
             opp.iter()
-                .map(|opp| {
-                    if matches!(opp, Opponent::RandomThreadRng(_)) {
-                        "random"
-                    } else {
-                        "entropy"
-                    }
+                .map(|opp| match opp {
+                    Opponent::Entoropy(_) => "entoropy",
+                    Opponent::RandomThreadRng(_) => "random",
+                    Opponent::RandomSmallRng(_) => unreachable!(),
+                    Opponent::SearchPlayer(_) => "search",
                 })
                 .join("_")
         };
