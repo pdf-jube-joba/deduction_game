@@ -97,7 +97,7 @@ fn main() {
             .margin(5)
             .caption("Histogram Test", ("sans-serif", 50.0))
             .build_cartesian_2d(
-                0u32..(EXPECT_MAX_TURN as u32),
+                (0u32..(EXPECT_MAX_TURN as u32)).into_segmented(),
                 0u32..(EXPECT_MAX_LEN as u32),
             )
             .unwrap();
