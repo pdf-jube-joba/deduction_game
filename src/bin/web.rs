@@ -37,6 +37,45 @@ fn card_view(CardViewProps { config, card }: &CardViewProps) -> Html {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct PlaySetting {
+    as_player: Player,
+    opponent_strategy: Vec<Option<WebOpponent>>,
+}
+
+impl PlaySetting {
+    fn new(config: &GameConfig) -> Self {
+        let mut opponent_strategy = vec![None; config.player_num()];
+        for i in 1..config.player_num() {
+            opponent_strategy[i] = Some(WebOpponent::Random);
+        }
+        PlaySetting {
+            as_player: 0,
+            opponent_strategy,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Properties)]
+struct PlayerRepProps {
+    player: Player,
+    play_setting: PlaySetting,
+}
+
+#[function_component(PlayerRepView)]
+fn player_rep(
+    PlayerRepProps {
+        player,
+        play_setting,
+    }: &PlayerRepProps,
+) -> Html {
+    if *player == play_setting.as_player {
+        html! {format!("あなた（{}）", player + 1)}
+    } else {
+        html! {format!("CPU（{}）", player + 1)}
+    }
+}
+
 struct MoveView {
     declare: Vec<bool>,
 }
@@ -75,7 +114,7 @@ impl Component for MoveView {
         let mut other_player_htmls = vec![];
         for i in 0..config.player_num() {
             if i != as_player {
-                let mut htmls = vec![html! {format!("query to {i}")}];
+                let mut htmls = vec![html! {format!("プレイヤー{}に質問する：", i + 1)}];
                 for s in config.all_sort() {
                     let snew = s.clone();
                     let callback = callback.clone();
@@ -95,12 +134,21 @@ impl Component for MoveView {
         }
 
         // declare cards
-        let declare_html = {
+        let (declare_html, html2) = {
             let mut declare_html = vec![];
+            let mut selected_num = 0;
             for i in 0..config.cards_num() {
+                if self.declare[i] {
+                    selected_num += 1;
+                }
                 let callback = ctx.link().callback(move |_: MouseEvent| MoveMsg::Toggle(i));
+                let selected_or_not_class = if self.declare[i] {
+                    classes!("selected")
+                } else {
+                    classes!("notselected")
+                };
                 let card_select = html! {
-                    <button onclick={callback}> {if self.declare[i] {"t"} else {"f"}} </button>
+                    <button onclick={callback} class={selected_or_not_class}> {i} </button>
                 };
                 declare_html.push(card_select);
             }
@@ -111,21 +159,37 @@ impl Component for MoveView {
                 .enumerate()
                 .filter_map(|(i, b)| if *b { Some(Card(i)) } else { None })
                 .collect();
-            let onclick = Callback::from(move |_: MouseEvent| {
-                callback.emit(Move::Declare {
-                    declare: declare.iter().cloned().collect(),
-                })
-            });
-            declare_html
-                .push(html! {<> <button onclick={onclick}> {"declare"} </button> <br/> </>});
-            declare_html
+
+            let (selectable, onclick) = if selected_num == config.head_num() {
+                (
+                    classes!("declareselectable"),
+                    Callback::from(move |_: MouseEvent| {
+                        callback.emit(Move::Declare {
+                            declare: declare.iter().cloned().collect(),
+                        })
+                    }),
+                )
+            } else {
+                (classes!("declareunselectable"), Callback::noop())
+            };
+
+            (
+                declare_html,
+                html! {<> <button onclick={onclick} class={selectable}> {"宣言する"} </button> </>},
+            )
         };
 
         html! {
-            <>
+            <div id="moves" class={classes!("roundbox")}>
+            {"あなたの行動"}
+            <div>
                 {for other_player_htmls.into_iter().flatten() }
+            </div>
+            <div>
+                {"頭にあるカードを"} {html2} {"："}
                 {declare_html}
-            </>
+            </div>
+            </div>
         }
     }
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -141,31 +205,52 @@ impl Component for MoveView {
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct HistoryProps {
     history: Vec<MoveAns>,
+    play_setting: PlaySetting,
+    config: GameConfig,
 }
 
 #[function_component(HistoryView)]
-fn history_view(HistoryProps { history }: &HistoryProps) -> Html {
-    history
+fn history_view(
+    HistoryProps {
+        history,
+        play_setting,
+        config,
+    }: &HistoryProps,
+) -> Html {
+    html!{
+        <div class={classes!("roundbox")}>
+        {"行動の履歴："} <br/>
+        {for history
         .iter()
-        .map(|qa| {
+        .enumerate()
+        .map(|(i, qa)| {
+            let player = config.player_turn(i);
             let h: Html = match qa {
                 MoveAns::Query {
                     query_to,
                     query_sort,
                     ans,
                 } => html! {<>
-                    {format!("Q: {query_to} {query_sort}")} <br/>
-                    {format!(" A: {ans}")} <br/>
+                    <PlayerRepView player={player} play_setting={play_setting.clone()} />
+                    {"から"}
+                    <PlayerRepView player={query_to} play_setting={play_setting.clone()} />
+                    {"へ質問："}
+                    {format!("{query_sort} は何枚ある？...{ans}")} <br/>
                 </>},
                 MoveAns::Declare { declare, ans } => html! {<>
-                    {format!("Q: {declare:?} ")} <br/>
-                    {format!(" A: {ans}")} <br/>
+                    <PlayerRepView player={player} play_setting={play_setting.clone()} />
+                    {"の宣言："}
+                    {format!("頭のカードは {} ... {}",
+                        declare.into_iter().map(|s| format!("{}", s.0)).join("と"),
+                        if *ans {"当たり"} else {"外れ"})} <br/>
                 </>},
             };
 
             html! {h}
         })
-        .collect()
+        }
+        </div>
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -177,7 +262,7 @@ struct PlayerViewProps {
 #[function_component(PlayerView)]
 fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
     let hand: Vec<Html> = {
-        let mut h: Vec<_> = vec![html! {"hand: "}];
+        let mut h: Vec<_> = vec![html! {"自分の手元："}];
         for c in &view.hand {
             h.push(html! {<CardView config={config.clone()} card={*c}/>});
         }
@@ -189,16 +274,18 @@ fn player_view(PlayerViewProps { config, view }: &PlayerViewProps) -> Html {
         let cs = cs.as_ref()?;
         Some(html! {
             <>
-            {format!("p({:?}) ", p)}
-            {for cs.iter().map(|c| html!{<CardView config={config.clone()} card={*c}/>})} <br/>
+            {format!("CPU({:?})の頭：", p + 1)}
+            {for cs.iter().map(|c| html!{<CardView config={config.clone()} card={*c}/>})} {"、"}
             </>
         })
     });
 
     html! {
         <>
+            <div id="view" class={classes!("roundbox")}>
             {hand}
             {for other}
+            </div>
         </>
     }
 }
@@ -226,25 +313,6 @@ fn map_strategy_name(m: WebOpponent) -> String {
     match m {
         WebOpponent::Random => "Random".to_string(),
         WebOpponent::Entropy => "Entropy".to_string(),
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct PlaySetting {
-    as_player: Player,
-    opponent_strategy: Vec<Option<WebOpponent>>,
-}
-
-impl PlaySetting {
-    fn new(config: &GameConfig) -> Self {
-        let mut opponent_strategy = vec![None; config.player_num()];
-        for i in 1..config.player_num() {
-            opponent_strategy[i] = Some(WebOpponent::Random);
-        }
-        PlaySetting {
-            as_player: 0,
-            opponent_strategy,
-        }
     }
 }
 
@@ -343,9 +411,9 @@ impl Component for SettingScene {
             if i == self.play_setting.as_player {
                 h.push(html! {
                     <tr>
-                    <th> {format!("あなた {}", i + 1)} </th>
+                    <th> <PlayerRepView player={i} play_setting={self.play_setting.clone()}/> </th>
                     <th> {"なし"} </th>
-                    {for all_strategy().into_iter().map(|opt| html!{ <th> {"なし"} </th>})}
+                    {for all_strategy().into_iter().map(|_| html!{ <th> {"なし"} </th>})}
                     <th> {"なし"} </th>
                     </tr>
                 })
@@ -375,7 +443,7 @@ impl Component for SettingScene {
                     .callback(move |_: MouseEvent| SettingSceneMsg::PlayAsThis(i));
                 h.push(html! {
                     <tr>
-                    <th> {format!("CPU（{}）", i + 1)} </th>
+                    <th> <PlayerRepView player={i} play_setting={self.play_setting.clone()}/> </th>
                     <th> {
                         map_strategy_name(self.play_setting.opponent_strategy[i].unwrap())
                     } </th>
@@ -503,21 +571,9 @@ impl Component for GameScene {
     fn view(&self, ctx: &Context<Self>) -> Html {
         let GameSceneProps {
             config,
-            play_setting: _,
+            play_setting,
         } = ctx.props();
         let move_callback = ctx.link().callback(GameSceneMsg::Move);
-        let win = if let Some(p) = self.game.is_win() {
-            html! {{format!("win: {p:?}")}}
-        } else {
-            html! {{"game goes"}}
-        };
-        let all_card = config.all_cards().into_iter().map(|c| {
-            html! {
-                <>
-                <CardView config={config.clone()} card={c}/> {" "}
-                </>
-            }
-        });
 
         let Info {
             config,
@@ -527,13 +583,27 @@ impl Component for GameScene {
 
         let as_player = self.as_player;
 
+        let if_win = if let Some(p) = self.game.is_win() {
+            log(format!("{p:?}"));
+            let p = p.into_iter().position_max().unwrap();
+            html! {<> {"勝者："} <PlayerRepView player={p} play_setting={play_setting.clone()}/> </> }
+        } else {
+            html! {}
+        };
+
+        let who_turn = {
+            let turn = self.game.player_turn();
+            html!{<> <div class={classes!("roundbox")}> {"今は"} <PlayerRepView player={turn} play_setting={play_setting.clone()} /> {"の手番"} </div>  </>}
+        };
+
         html! {
             <>
-            {"cards:"} {for all_card} <br/>
-            {win} <br/>
+            <GameConfigView config={config.clone()}/>
             <PlayerView config={config.clone()} view={view}/>
             <MoveView as_player={as_player} config={config.clone()} callback={move_callback}/>
-            <HistoryView history={query_answer}/>
+            {who_turn}
+            <HistoryView history={query_answer} play_setting={play_setting.clone()} config={config.clone()}/>
+            {if_win}
             </>
         }
     }

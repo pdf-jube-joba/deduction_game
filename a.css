@@ -28,3 +28,19 @@ thead,
 tfoot {
   background-color: rgb(200, 200, 200);
 }
+
+button.selected {
+    opacity: 0.8;
+}
+
+button.notselected {
+    opacity: 0.2;
+}
+
+button.declareselectable {
+    opacity: 0.8;
+}
+
+button.declareunselectable {
+    opacity: 0.2;
+}
