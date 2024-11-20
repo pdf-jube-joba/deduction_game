@@ -2,7 +2,7 @@ use game::{
     abstract_game::{Agent, ImperfectInfoGame, Player},
     agent::*,
     defs::*,
-    utils::default_config,
+    utils::{default_config, four_midium, three_midium},
 };
 use gloo::timers::callback::Interval;
 use itertools::Itertools;
@@ -351,21 +351,18 @@ fn gameconfig_view(GameConfigProps { config }: &GameConfigProps) -> Html {
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
-struct GameRuleProps {
-    config: GameConfig,
-}
+struct GameRuleProps {}
 
 #[function_component(GameRuleView)]
-fn gamerule_view(GameRuleProps { config }: &GameRuleProps) -> Html {
+fn gamerule_view(GameRuleProps {}: &GameRuleProps) -> Html {
     html! {
         <div id="rule" class={classes!("roundbox")}>
         <div class={classes!("smallbox")}>
             {"このゲームはカード当てゲームです。あなたの頭にあるカードを当てましょう"}
         </div>
         <div class={classes!("smallbox")}>
-            {"それぞれのカードは属性をそれぞれ（複数）持っています。"} <br/>
-            {"使うカードと属性は下に書いてある通りです。"} <br/>
-            {format!("各プレイヤーは、自分の手元と頭にそれぞれ {} 枚と {} 枚のカードを持ちます。", config.hand_num(), config.head_num())} <br/>
+            {"それぞれのカードは属性をそれぞれ（複数）持っています。使うカードと属性は下に書いてある通りです。"} <br/>
+            {"各プレイヤーは、自分の手元と頭にそれぞれ何枚かのカードを持ちます。"} <br/>
             {"自分の手元にあるカードは自分にしか見えません。"} <br/>
             {"自分の頭にあるカードは他のプレイヤーにしか見えません。"} <br/>
         </div>
@@ -374,8 +371,6 @@ fn gamerule_view(GameRuleProps { config }: &GameRuleProps) -> Html {
         {"1. 自分の頭にあるカードを予想して宣言する：もしあっていたらそのプレイヤーの一人勝ちです。"} <br/>
         {"2. 他のプレイヤーに、ある属性について、その属性を持っているカードが何枚見えるかを質問することができます。"} <br/>
         {"行動1. と 2. はともに、その内容はほかのすべてのプレイヤーとその結果を共有することになります。"}
-        </div>
-        <div class={classes!("smallbox")}>
         {"自分が過去にやった行動を 2 回することはできません。"}
         </div>
         </div>
@@ -388,6 +383,38 @@ struct SettingScene {
     play_setting: PlaySetting,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ConfigKind {
+    Default,
+    ThreeMidium,
+    FourMidium,
+}
+
+impl ConfigKind {
+    fn all() -> Vec<ConfigKind> {
+        vec![
+            ConfigKind::Default,
+            ConfigKind::ThreeMidium,
+            ConfigKind::FourMidium,
+        ]
+    }
+    fn map_str(self) -> String {
+        match self {
+            ConfigKind::Default => "Default".to_string(),
+            ConfigKind::ThreeMidium => "3 midium".to_string(),
+            ConfigKind::FourMidium => "4 midium".to_string(),
+        }
+    }
+}
+
+fn map_configkind(m: ConfigKind) -> GameConfig {
+    match m {
+        ConfigKind::Default => default_config(),
+        ConfigKind::ThreeMidium => three_midium(),
+        ConfigKind::FourMidium => four_midium(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct SettingSceneProps {
     setting_end: Callback<(GameConfig, PlaySetting)>,
@@ -396,6 +423,7 @@ struct SettingSceneProps {
 #[derive(Debug, Clone, PartialEq)]
 enum SettingSceneMsg {
     ChangeStrategy(Player, WebOpponent),
+    ChangeConfig(ConfigKind),
     PlayAsThis(Player),
     OnEnd,
 }
@@ -413,6 +441,18 @@ impl Component for SettingScene {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        let choose_config: Html = ConfigKind::all()
+            .into_iter()
+            .map(|kind| {
+                let onclick = ctx
+                    .link()
+                    .callback(move |_: MouseEvent| SettingSceneMsg::ChangeConfig(kind));
+                html! {
+                    <button onclick={onclick}> {kind.map_str()} </button>
+                }
+            })
+            .collect();
+
         let mut h: Vec<Html> = vec![];
         for i in self.config.all_player() {
             if i == self.play_setting.as_player {
@@ -465,7 +505,8 @@ impl Component for SettingScene {
 
         html! {
             <>
-            <GameRuleView config={self.config.clone()}/>
+            <GameRuleView/>
+            <div id="chooseconfig" class={classes!("roundbox")}> {"ゲーム設定変更："} {choose_config}  </div>
             <GameConfigView config={self.config.clone()}/>
             <div class={classes!("roundbox")}>
             <table>
@@ -507,6 +548,12 @@ impl Component for SettingScene {
                     *self.play_setting.strategy_of_player(i);
                 *self.play_setting.strategy_of_player_mut(i) = tmp;
                 self.play_setting.as_player = i;
+                true
+            }
+            SettingSceneMsg::ChangeConfig(kind) => {
+                let config = map_configkind(kind);
+                self.play_setting = PlaySetting::new(&config);
+                self.config = config.clone();
                 true
             }
         }

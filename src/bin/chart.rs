@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use game::abstract_game::*;
 use game::agent::{Opponent, RandomPlayer, UseEntropyPlayer};
 use game::defs::GameConfig;
-use game::utils::{default_config, three_midium};
+use game::utils::{default_config, four_midium, three_midium};
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use plotters::prelude::*;
@@ -61,7 +61,7 @@ fn main() {
         Opponent::Entoropy(UseEntropyPlayer::default()),
     ];
 
-    let config = default_config();
+    let config = four_midium();
     let num = config.player_num();
 
     for players in rec(num, &ps) {
@@ -120,9 +120,9 @@ fn main() {
             )
             .unwrap();
 
-        let mut win = vec![0; 3];
+        let mut win = vec![0; config.player_num()];
         for t in data {
-            win[t % 3] += 1;
+            win[t % config.player_num()] += 1;
         }
 
         eprintln!("{win:?}");

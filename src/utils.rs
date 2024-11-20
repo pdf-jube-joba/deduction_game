@@ -80,7 +80,7 @@ pub fn four_midium() -> GameConfig {
         .into_iter()
         .map(|v| v.into_iter().map(|s| Sort(s.to_string())).collect())
         .collect(),
-        3,
+        4,
         2,
         1,
     )
