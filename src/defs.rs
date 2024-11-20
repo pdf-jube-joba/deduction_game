@@ -82,7 +82,7 @@ impl GameConfig {
             return None;
         }
         for ss in &cards_sort {
-            for s in ss.into_iter() {
+            for s in ss {
                 if !sorts.contains(s) {
                     return None;
                 }

@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use super::{defs::*, utils::*};
 use crate::abstract_game::{Agent, ImperfectInfoGame};
-use itertools::Itertools;
 use rand::{
     rngs::{SmallRng, ThreadRng},
     thread_rng,
@@ -187,6 +186,7 @@ impl Agent for UseEntropyPlayer {
         } else {
             // 聞けることすべて聞いて、特定ができてないケース
             let possible_declare = info.movable_declare();
+            // 一番ありうる頭のカードを当てるためにカウントをとる
             let mut maps: HashMap<Move, usize> = HashMap::new();
             for distr in distrs {
                 let head = Move::Declare {
@@ -198,8 +198,7 @@ impl Agent for UseEntropyPlayer {
                 let entry = maps.entry(head);
                 entry.and_modify(|i| *i += 1).or_default();
             }
-            let (a, _) = maps.into_iter().max_by_key(|(a, n)| *n).unwrap();
-            a
+            maps.into_iter().max_by_key(|(_, n)| *n).unwrap().0
         }
     }
 }
@@ -241,10 +240,8 @@ pub fn search_rec(
         let next_player = config.player_turn(query_answer.len() + 1);
         let possible_state: Vec<_> = possible_states(config, query_answer, view).collect();
         let state_len = possible_state.len();
-        let n: usize = next_player.into();
-        movables[n]
+        let m = movables[usize::from(now_player)]
             .iter()
-            .filter(|m| todo!())
             .map(|m| {
                 let mut points = vec![0_f64; config.player_num()];
                 for distr in possible_state.clone() {
@@ -270,7 +267,12 @@ pub fn search_rec(
                     std::cmp::Ordering::Greater
                 }
             })
-            .map(|(m, p)| (m.clone(), p))
+            .map(|(m, p)| (m.clone(), p));
+        if let Some((m, _)) = &m {
+            let now_player: usize = now_player.into();
+            assert!(movables[now_player].contains(m));
+        }
+        m
     }
 }
 
@@ -350,7 +352,7 @@ mod tests {
             query_sort: "B".into(),
         });
         let info = game.info_and_move_now();
-        let a = search_depth(&info.0, 3);
+        let a = search_depth(&info.0, 4);
         eprintln!("{a:?}")
     }
 }

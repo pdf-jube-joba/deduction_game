@@ -48,9 +48,9 @@ mod tests {
     #[test]
     fn test_entropy() {
         let config = default_config();
-        let agent0 = UseEntropyPlayer::default();
-        let agent1 = UseEntropyPlayer::default();
-        let agent2 = UseEntropyPlayer::default();
+        let agent0 = UseEntropyPlayer;
+        let agent1 = UseEntropyPlayer;
+        let agent2 = UseEntropyPlayer;
         let players: Vec<Box<dyn Agent<Game = Game>>> =
             vec![Box::new(agent0), Box::new(agent1), Box::new(agent2)];
         test_player_with_config(config, players);

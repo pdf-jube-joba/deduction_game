@@ -7,7 +7,7 @@ use game::{
 use gloo::timers::callback::Interval;
 use itertools::Itertools;
 use rand::{rngs::SmallRng, thread_rng, SeedableRng};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use yew::prelude::*;
 
 pub fn log<S>(s: S)
@@ -46,8 +46,12 @@ struct PlaySetting {
 impl PlaySetting {
     fn new(config: &GameConfig) -> Self {
         let mut opponent_strategy = vec![None; config.player_num()];
-        for i in 1..config.player_num() {
-            opponent_strategy[i] = Some(WebOpponent::Random);
+        for a in opponent_strategy
+            .iter_mut()
+            .take(config.player_num())
+            .skip(1)
+        {
+            *a = Some(WebOpponent::Random);
         }
         PlaySetting {
             as_player: 0.into(),
@@ -222,7 +226,7 @@ fn history_view(
     HistoryProps {
         history,
         play_setting,
-        config,
+        config: _,
     }: &HistoryProps,
 ) -> Html {
     html! {
@@ -248,7 +252,7 @@ fn history_view(
                     <PlayerRepView player={*who} play_setting={play_setting.clone()} />
                     {"の宣言："}
                     {format!("頭のカードは {} ... {}",
-                        declare.into_iter().map(|s| format!("{}", s.0)).join("と"),
+                        declare.iter().map(|s| format!("{}", s.0)).join("と"),
                         if *ans {"当たり"} else {"外れ"})} <br/>
                 </>},
             };
@@ -305,7 +309,11 @@ enum WebOpponent {
 }
 
 fn all_strategy() -> Vec<WebOpponent> {
-    vec![WebOpponent::Random, WebOpponent::Entropy, WebOpponent::Search]
+    vec![
+        WebOpponent::Random,
+        WebOpponent::Entropy,
+        WebOpponent::Search,
+    ]
 }
 
 fn map_opp(m: WebOpponent) -> Opponent {
@@ -313,7 +321,7 @@ fn map_opp(m: WebOpponent) -> Opponent {
         WebOpponent::Random => {
             Opponent::RandomSmallRng(RandomPlayer::new(SmallRng::from_entropy()))
         }
-        WebOpponent::Entropy => Opponent::Entoropy(UseEntropyPlayer::default()),
+        WebOpponent::Entropy => Opponent::Entoropy(UseEntropyPlayer),
         WebOpponent::Search => Opponent::SearchPlayer(SearchPlayer::new(3)),
     }
 }
@@ -434,7 +442,7 @@ enum SettingSceneMsg {
 impl Component for SettingScene {
     type Message = SettingSceneMsg;
     type Properties = SettingSceneProps;
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         let config = default_config();
         let play_setting = PlaySetting::new(&config);
         Self {
@@ -490,7 +498,7 @@ impl Component for SettingScene {
                 };
                 let onclick = ctx
                     .link()
-                    .callback(move |_: MouseEvent| SettingSceneMsg::PlayAsThis(i.into()));
+                    .callback(move |_: MouseEvent| SettingSceneMsg::PlayAsThis(i));
                 h.push(html! {
                     <tr>
                     <th> <PlayerRepView player={i} play_setting={self.play_setting.clone()}/> </th>
@@ -583,30 +591,6 @@ struct GameSceneProps {
     play_setting: PlaySetting,
 }
 
-// impl GameSceneProps {
-//     fn new(config: GameConfig, play_setting: PlaySetting) -> Option<Self> {
-//         let PlaySetting {
-//             as_player,
-//             opponent_strategy,
-//         } = &play_setting;
-//         if config.player_num() != opponent_strategy.len() {
-//             return None;
-//         }
-//         for (i, v) in opponent_strategy.iter().enumerate() {
-//             if i == *as_player && opponent_strategy[i].is_some() {
-//                 return None;
-//             }
-//             if i != *as_player && opponent_strategy[i].is_none() {
-//                 return None;
-//             }
-//         }
-//         Some(Self {
-//             config,
-//             play_setting,
-//         })
-//     }
-// }
-
 impl Component for GameScene {
     type Message = GameSceneMsg;
     type Properties = GameSceneProps;
@@ -630,7 +614,7 @@ impl Component for GameScene {
     }
     fn view(&self, ctx: &Context<Self>) -> Html {
         let GameSceneProps {
-            config,
+            config: _,
             play_setting,
         } = ctx.props();
         let move_callback = ctx.link().callback(GameSceneMsg::Move);
@@ -667,7 +651,7 @@ impl Component for GameScene {
             </>
         }
     }
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         let as_player = self.as_player;
         let who_turn = self.game.player_turn();
         log(format!("{msg:?} {who_turn} {as_player}"));

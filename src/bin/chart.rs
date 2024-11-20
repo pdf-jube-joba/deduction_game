@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use game::abstract_game::*;
 use game::agent::{Opponent, RandomPlayer, SearchPlayer, UseEntropyPlayer};
 use game::defs::GameConfig;
-use game::utils::{default_config, four_midium, three_midium};
+use game::utils::*;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use plotters::prelude::*;
@@ -58,7 +58,7 @@ fn main() {
     let ps: Vec<Opponent> = vec![
         // Opponent::Random(RandomPlayer::new(SmallRng::from_entropy())),
         Opponent::RandomThreadRng(RandomPlayer::default()),
-        Opponent::Entoropy(UseEntropyPlayer::default()),
+        Opponent::Entoropy(UseEntropyPlayer),
         Opponent::SearchPlayer(SearchPlayer::new(3)),
     ];
 

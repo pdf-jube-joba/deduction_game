@@ -146,11 +146,15 @@ pub fn possible_states<'a>(
                 let who = match qa {
                     MoveAns::Query {
                         who,
-                        query_to,
-                        query_sort,
-                        ans,
+                        query_to: _,
+                        query_sort: _,
+                        ans: _,
                     } => who,
-                    MoveAns::Declare { who, declare, ans } => who,
+                    MoveAns::Declare {
+                        who,
+                        declare: _,
+                        ans: _,
+                    } => who,
                 };
                 let m = qa.move_of_this();
                 let a = answer(config, distr, m, *who);
