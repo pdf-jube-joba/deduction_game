@@ -14,7 +14,7 @@ fn main() {
             vec![Box::new(user), Box::new(agent1), Box::new(agent2)];
 
         loop {
-            let player = game.player_turn();
+            let player: usize = game.player_turn().into();
             let agent = &mut players[player];
             let info = game.info_and_move_now();
             let m = agent.use_info(info.0, info.1);

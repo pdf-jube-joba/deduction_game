@@ -21,7 +21,7 @@ mod tests {
         eprintln!("{game:?}");
         let mut i = 0;
         while game.is_win().is_none() {
-            let player = game.player_turn();
+            let player: usize = game.player_turn().into();
             let agent = &mut players[player];
             let info = game.info_and_move_now();
             let m = agent.use_info(info.0, info.1);

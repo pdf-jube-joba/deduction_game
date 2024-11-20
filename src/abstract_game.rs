@@ -1,4 +1,26 @@
-pub type Player = usize;
+use std::fmt::Display;
+
+///  Player(i) がいるなら j < i に対して Player(j) もいること
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Player(usize);
+
+impl Display for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0 + 1)
+    }
+}
+
+impl From<usize> for Player {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Player> for usize {
+    fn from(value: Player) -> Self {
+        value.0
+    }
+}
 
 pub trait ImperfectInfoGame {
     type Info;
@@ -29,7 +51,7 @@ where
     while game.is_win().is_none() {
         let p = game.player_turn();
         let info_move = game.info_and_move_now();
-        let m = agents[p].use_info(info_move.0, info_move.1);
+        let m = agents[p.0].use_info(info_move.0, info_move.1);
         if !game.move_game(m) {
             panic!("動けるやつにして");
         }

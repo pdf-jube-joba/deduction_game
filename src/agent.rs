@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use super::{defs::*, utils::*};
 use crate::abstract_game::{Agent, ImperfectInfoGame};
+use itertools::Itertools;
 use rand::{
     rngs::{SmallRng, ThreadRng},
     thread_rng,
@@ -108,12 +109,12 @@ where
                 declare: answer.into_iter().collect(),
             };
         }
-        let possible_moves = info.query_at();
+        let possible_moves = info.movable_query();
         if possible_moves.is_empty() {
-            let possible_declare = info.declare_at();
+            let possible_declare = info.movable_declare();
             possible_declare.into_iter().next().unwrap() // possible declare がないのはありえないと思う。
         } else {
-            random_vec(&mut self.rng, possible_moves)
+            random_vec(&mut self.rng, possible_moves.into_iter().collect())
         }
     }
 }
@@ -147,7 +148,7 @@ impl Agent for UseEntropyPlayer {
         assert!(!distrs.is_empty());
 
         let (_, q) = info
-            .query_at()
+            .movable_query()
             .into_iter()
             .map(|q| {
                 let mut distribution = vec![0; info.config.cards_num()];
@@ -184,18 +185,18 @@ pub struct SearchPlayer {
 }
 
 pub fn search_depth(info: &Info) -> Move {
-    let mut player_move = vec![];
-    for i in info.config.all_player() {
-        let s: HashSet<_> = info
-            .query_answer
-            .iter()
-            .skip(i)
-            .cloned()
-            .step_by(info.config.player_num())
-            .collect();
-        player_move.push(s);
-    }
-    let possible_distr: Vec<_> = possible_states(info.clone()).collect();
+    // let mut player_move = vec![];
+    // for i in info.config.all_player() {
+    //     let s: HashSet<_> = info
+    //         .query_answer
+    //         .iter()
+    //         .skip(i)
+    //         .cloned()
+    //         .step_by(info.config.player_num())
+    //         .collect();
+    //     player_move.push(s);
+    // }
+    // let possible_distr: Vec<_> = possible_states(info.clone()).collect();
     // let mut used = vec![];
     todo!()
 }

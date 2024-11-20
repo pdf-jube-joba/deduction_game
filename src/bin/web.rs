@@ -7,7 +7,7 @@ use game::{
 use gloo::timers::callback::Interval;
 use itertools::Itertools;
 use rand::{rngs::SmallRng, thread_rng, SeedableRng};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use yew::prelude::*;
 
 pub fn log<S>(s: S)
@@ -50,9 +50,17 @@ impl PlaySetting {
             opponent_strategy[i] = Some(WebOpponent::Random);
         }
         PlaySetting {
-            as_player: 0,
+            as_player: 0.into(),
             opponent_strategy,
         }
+    }
+    fn strategy_of_player(&self, player: Player) -> &Option<WebOpponent> {
+        let player: usize = player.into();
+        &self.opponent_strategy[player]
+    }
+    fn strategy_of_player_mut(&mut self, player: Player) -> &mut Option<WebOpponent> {
+        let player: usize = player.into();
+        &mut self.opponent_strategy[player]
     }
 }
 
@@ -70,9 +78,9 @@ fn player_rep(
     }: &PlayerRepProps,
 ) -> Html {
     if *player == play_setting.as_player {
-        html! {format!("あなた（{}）", player + 1)}
+        html! {format!("あなた（{}）", player)}
     } else {
-        html! {format!("CPU（{}）", player + 1)}
+        html! {format!("CPU（{}）", player)}
     }
 }
 
@@ -112,9 +120,9 @@ impl Component for MoveView {
         } = ctx.props().clone();
         // query to other player
         let mut other_player_htmls = vec![];
-        for i in 0..config.player_num() {
+        for i in config.all_player() {
             if i != as_player {
-                let mut htmls = vec![html! {format!("プレイヤー{}に質問する：", i + 1)}];
+                let mut htmls = vec![html! {format!("プレイヤー{}に質問する：", i)}];
                 for s in config.all_sort() {
                     let snew = s.clone();
                     let callback = callback.clone();
@@ -153,7 +161,7 @@ impl Component for MoveView {
                 declare_html.push(card_select);
             }
 
-            let declare: HashSet<_> = self
+            let declare: Vec<_> = self
                 .declare
                 .iter()
                 .enumerate()
@@ -165,7 +173,7 @@ impl Component for MoveView {
                     classes!("declareselectable"),
                     Callback::from(move |_: MouseEvent| {
                         callback.emit(Move::Declare {
-                            declare: declare.iter().cloned().collect(),
+                            declare: declare.clone(),
                         })
                     }),
                 )
@@ -217,7 +225,7 @@ fn history_view(
         config,
     }: &HistoryProps,
 ) -> Html {
-    html!{
+    html! {
         <div class={classes!("roundbox")}>
         {"行動の履歴："} <br/>
         {for history
@@ -233,7 +241,7 @@ fn history_view(
                 } => html! {<>
                     <PlayerRepView player={player} play_setting={play_setting.clone()} />
                     {"から"}
-                    <PlayerRepView player={query_to} play_setting={play_setting.clone()} />
+                    <PlayerRepView player={*query_to} play_setting={play_setting.clone()} />
                     {"へ質問："}
                     {format!("{query_sort} は何枚ある？...{ans}")} <br/>
                 </>},
@@ -336,7 +344,7 @@ fn gameconfig_view(GameConfigProps { config }: &GameConfigProps) -> Html {
         .collect();
     html! {
         <div id="setting" class={classes!("roundbox")}>
-            {"game setting"}
+            {"game setting"} <br/>
             {"プレイする人数："} {config.player_num()} <br/>
             {"使うカード："} {all_cards} <br/>
         </div>
@@ -388,8 +396,8 @@ struct SettingSceneProps {
 
 #[derive(Debug, Clone, PartialEq)]
 enum SettingSceneMsg {
-    ChangeStrategy(usize, WebOpponent),
-    PlayAsThis(usize),
+    ChangeStrategy(Player, WebOpponent),
+    PlayAsThis(Player),
     OnEnd,
 }
 
@@ -407,7 +415,7 @@ impl Component for SettingScene {
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let mut h: Vec<Html> = vec![];
-        for i in 0..self.config.player_num() {
+        for i in self.config.all_player() {
             if i == self.play_setting.as_player {
                 h.push(html! {
                     <tr>
@@ -424,12 +432,12 @@ impl Component for SettingScene {
                         let onclick = ctx
                             .link()
                             .callback(move |_: MouseEvent| SettingSceneMsg::ChangeStrategy(i, m));
-                        let this_or_not_class = if Some(m) == self.play_setting.opponent_strategy[i]
-                        {
-                            "t"
-                        } else {
-                            "f"
-                        };
+                        let this_or_not_class =
+                            if Some(m) == *self.play_setting.strategy_of_player(i) {
+                                "t"
+                            } else {
+                                "f"
+                            };
                         h.push(html! {
                         <th>
                             <button onclick={onclick} class={this_or_not_class}> {"この戦略にする"} </button>
@@ -440,12 +448,12 @@ impl Component for SettingScene {
                 };
                 let onclick = ctx
                     .link()
-                    .callback(move |_: MouseEvent| SettingSceneMsg::PlayAsThis(i));
+                    .callback(move |_: MouseEvent| SettingSceneMsg::PlayAsThis(i.into()));
                 h.push(html! {
                     <tr>
                     <th> <PlayerRepView player={i} play_setting={self.play_setting.clone()}/> </th>
                     <th> {
-                        map_strategy_name(self.play_setting.opponent_strategy[i].unwrap())
+                        map_strategy_name(self.play_setting.strategy_of_player(i).unwrap())
                     } </th>
                     {for strategy_change_html}
                     <th> <button onclick={onclick}> {"この手番でプレイする"} </button> </th>
@@ -484,7 +492,7 @@ impl Component for SettingScene {
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             SettingSceneMsg::ChangeStrategy(i, s) => {
-                self.play_setting.opponent_strategy[i] = Some(s);
+                *self.play_setting.strategy_of_player_mut(i) = Some(s);
                 true
             }
             SettingSceneMsg::OnEnd => {
@@ -495,7 +503,10 @@ impl Component for SettingScene {
             }
             SettingSceneMsg::PlayAsThis(i) => {
                 let p = self.play_setting.as_player;
-                self.play_setting.opponent_strategy.swap(i, p);
+                let tmp = self.play_setting.strategy_of_player_mut(p).take();
+                *self.play_setting.strategy_of_player_mut(p) =
+                    *self.play_setting.strategy_of_player(i);
+                *self.play_setting.strategy_of_player_mut(i) = tmp;
                 self.play_setting.as_player = i;
                 true
             }
@@ -505,7 +516,7 @@ impl Component for SettingScene {
 
 struct GameScene {
     game: Game,
-    as_player: usize,
+    as_player: Player,
     other_players: Vec<Option<Opponent>>,
     #[allow(unused)]
     interval: Interval,
@@ -523,29 +534,29 @@ struct GameSceneProps {
     play_setting: PlaySetting,
 }
 
-impl GameSceneProps {
-    fn new(config: GameConfig, play_setting: PlaySetting) -> Option<Self> {
-        let PlaySetting {
-            as_player,
-            opponent_strategy,
-        } = &play_setting;
-        if config.player_num() != opponent_strategy.len() {
-            return None;
-        }
-        for (i, v) in opponent_strategy.iter().enumerate() {
-            if i == *as_player && opponent_strategy[i].is_some() {
-                return None;
-            }
-            if i != *as_player && opponent_strategy[i].is_none() {
-                return None;
-            }
-        }
-        Some(Self {
-            config,
-            play_setting,
-        })
-    }
-}
+// impl GameSceneProps {
+//     fn new(config: GameConfig, play_setting: PlaySetting) -> Option<Self> {
+//         let PlaySetting {
+//             as_player,
+//             opponent_strategy,
+//         } = &play_setting;
+//         if config.player_num() != opponent_strategy.len() {
+//             return None;
+//         }
+//         for (i, v) in opponent_strategy.iter().enumerate() {
+//             if i == *as_player && opponent_strategy[i].is_some() {
+//                 return None;
+//             }
+//             if i != *as_player && opponent_strategy[i].is_none() {
+//                 return None;
+//             }
+//         }
+//         Some(Self {
+//             config,
+//             play_setting,
+//         })
+//     }
+// }
 
 impl Component for GameScene {
     type Message = GameSceneMsg;
@@ -585,7 +596,7 @@ impl Component for GameScene {
 
         let if_win = if let Some(p) = self.game.is_win() {
             log(format!("{p:?}"));
-            let p = p.into_iter().position_max().unwrap();
+            let p: Player = p.into_iter().position_max().unwrap().into();
             html! {<> {"勝者："} <PlayerRepView player={p} play_setting={play_setting.clone()}/> </> }
         } else {
             html! {}
@@ -593,7 +604,7 @@ impl Component for GameScene {
 
         let who_turn = {
             let turn = self.game.player_turn();
-            html!{<> <div class={classes!("roundbox")}> {"今は"} <PlayerRepView player={turn} play_setting={play_setting.clone()} /> {"の手番"} </div>  </>}
+            html! {<> <div class={classes!("roundbox")}> {"今は"} <PlayerRepView player={turn} play_setting={play_setting.clone()} /> {"の手番"} </div>  </>}
         };
 
         html! {
@@ -619,6 +630,7 @@ impl Component for GameScene {
                 }
             }
             GameSceneMsg::OtherMove if who_turn != as_player => {
+                let who_turn: usize = who_turn.into();
                 let p = self.other_players[who_turn].as_mut().unwrap();
                 let info = self.game.info_and_move_now();
                 let m = p.use_info(info.0, info.1);

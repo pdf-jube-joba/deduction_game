@@ -15,7 +15,7 @@ fn test_player_with_config(config: GameConfig, mut players: Vec<Opponent>) -> us
 
     while game.is_win().is_none() {
         i += 1;
-        let player = game.player_turn();
+        let player: usize = game.player_turn().into();
         let agent = &mut players[player];
         let info = game.info_and_move_now();
         let m = agent.use_info(info.0, info.1);

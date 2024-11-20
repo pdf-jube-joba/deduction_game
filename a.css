@@ -12,7 +12,8 @@ div.smallbox {
 span.card {
     border: solid #999 1pt ;
     border-radius: 3pt;
-    margin: 4pt;
+    margin-bottom: 1pt;
+    display:inline-block;
 }
 
 table {

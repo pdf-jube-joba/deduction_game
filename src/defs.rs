@@ -1,8 +1,9 @@
 use crate::abstract_game::{self, Player};
 use itertools::Itertools;
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::BTreeSet,
     fmt::Display,
+    ops::{Index, IndexMut},
 };
 
 // type of sort
@@ -15,6 +16,7 @@ impl Display for Sort {
     }
 }
 
+/// Card(i) があるなら j < i に対して Card(j) もあること
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Card(pub usize);
 
@@ -24,10 +26,35 @@ impl Display for Card {
     }
 }
 
+impl From<usize> for Card {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Card> for usize {
+    fn from(value: Card) -> Self {
+        value.0
+    }
+}
+
+impl<T> Index<Card> for Vec<T> {
+    type Output = T;
+    fn index(&self, index: Card) -> &Self::Output {
+        &self[index.0]
+    }
+}
+
+impl<T> IndexMut<Card> for Vec<T> {
+    fn index_mut(&mut self, index: Card) -> &mut Self::Output {
+        &mut self[index.0]
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameConfig {
-    sorts: HashSet<Sort>,
-    cards_sort: Vec<HashSet<Sort>>,
+    sorts: BTreeSet<Sort>,
+    cards_sort: Vec<BTreeSet<Sort>>,
     player_num: usize,
     head_num: usize,
     hand_num: usize,
@@ -35,8 +62,8 @@ pub struct GameConfig {
 
 impl GameConfig {
     pub fn new(
-        sorts: HashSet<Sort>,
-        cards_sort: Vec<HashSet<Sort>>, // cards_sort[i] = i-th card's sorts
+        sorts: BTreeSet<Sort>,
+        cards_sort: Vec<BTreeSet<Sort>>, // cards_sort[i] = i-th card's sorts
         player_num: usize,
         head_num: usize,
         hand_num: usize,
@@ -46,7 +73,7 @@ impl GameConfig {
             return None;
         }
         for ss in &cards_sort {
-            for s in ss {
+            for s in ss.into_iter() {
                 if !sorts.contains(s) {
                     return None;
                 }
@@ -65,7 +92,7 @@ impl GameConfig {
     }
     // input turn: usize => which player should move
     pub fn player_turn(&self, n: usize) -> Player {
-        n % self.player_num
+        (n % self.player_num).into()
     }
     pub fn cards_num(&self) -> usize {
         self.cards_sort.len()
@@ -77,15 +104,15 @@ impl GameConfig {
         self.hand_num
     }
     pub fn all_player(&self) -> Vec<Player> {
-        (0..self.player_num).collect()
+        (0..self.player_num).map(|i| i.into()).collect()
     }
-    pub fn all_sort(&self) -> HashSet<Sort> {
+    pub fn all_sort(&self) -> BTreeSet<Sort> {
         self.sorts.clone()
     }
     pub fn all_cards(&self) -> Vec<Card> {
         (0..self.cards_num()).map(Card).collect()
     }
-    pub fn all_sort_of_card(&self, card: &Card) -> &HashSet<Sort> {
+    pub fn all_sort_of_card(&self, card: &Card) -> &BTreeSet<Sort> {
         if card.0 > self.cards_num() {
             panic!("変なカード")
         }
@@ -95,8 +122,8 @@ impl GameConfig {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlCard {
-    pub hand: HashSet<Card>,
-    pub head: HashSet<Card>,
+    pub hand: BTreeSet<Card>,
+    pub head: BTreeSet<Card>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -106,8 +133,8 @@ pub struct Distr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct View {
-    pub hand: HashSet<Card>,
-    pub other: Vec<Option<HashSet<Card>>>,
+    pub hand: BTreeSet<Card>,
+    pub other: Vec<Option<BTreeSet<Card>>>,
 }
 
 impl View {
@@ -154,7 +181,7 @@ impl GameConfig {
         let ind = rng.gen_range(0..all_states.len());
         let distr = all_states.into_iter().nth(ind).unwrap();
         let mut player_moves = vec![];
-        for i in 0..self.player_num() {
+        for i in self.all_player() {
             player_moves.push(
                 all_query(self)
                     .filter(
@@ -173,12 +200,14 @@ impl GameConfig {
 }
 
 impl Distr {
-    pub fn players_head(&self, player: Player) -> &HashSet<Card> {
-        &self.state[player].head
+    pub fn players_head(&self, player: Player) -> &BTreeSet<Card> {
+        let i: usize = player.into();
+        &self.state[i].head
     }
 
-    pub fn players_hand(&self, player: Player) -> &HashSet<Card> {
-        &self.state[player].hand
+    pub fn players_hand(&self, player: Player) -> &BTreeSet<Card> {
+        let i: usize = player.into();
+        &self.state[i].hand
     }
 
     pub fn cards_from_player(&self, player: Player) -> View {
@@ -188,6 +217,7 @@ impl Distr {
             .iter()
             .enumerate()
             .map(|(i, c)| {
+                let i: Player = i.into();
                 if i != player {
                     Some(c.head.clone())
                 } else {
@@ -252,7 +282,7 @@ pub fn answer(config: &GameConfig, distr: &Distr, m: Move, who: Player) -> MoveA
         }
         Move::Declare { declare } => {
             let player_head = distr.players_head(who);
-            let b = declare.iter().cloned().collect::<HashSet<_>>() == *player_head;
+            let b = declare.iter().cloned().collect::<BTreeSet<_>>() == *player_head;
             MoveAns::Declare { declare, ans: b }
         }
     }
@@ -266,6 +296,9 @@ pub fn all_query(config: &GameConfig) -> impl Iterator<Item = Move> {
         }
     })
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct History(Vec<MoveAns>);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Game {
@@ -286,15 +319,18 @@ impl Info {
     pub fn player_turn(&self) -> Player {
         self.config.player_turn(self.query_answer.len())
     }
-    pub fn query_at(&self) -> Vec<Move> {
-        let p = self.config.player_turn(self.query_answer.len());
-        let past_moves: Vec<Move> = self
-            .query_answer
+    pub fn moves_of_player(&self, player: Player) -> Vec<Move> {
+        let player: usize = player.into();
+        self.query_answer
             .iter()
-            .skip(p)
+            .skip(player)
             .step_by(self.config.player_num())
             .map(|qa| qa.move_of_this())
-            .collect();
+            .collect()
+    }
+    pub fn movable_query(&self) -> BTreeSet<Move> {
+        let p = self.config.player_turn(self.query_answer.len());
+        let past_moves = self.moves_of_player(p);
         all_query(&self.config)
             .filter(|q| {
                 !past_moves.contains(q)
@@ -308,15 +344,9 @@ impl Info {
             })
             .collect()
     }
-    pub fn declare_at(&self) -> Vec<Move> {
+    pub fn movable_declare(&self) -> BTreeSet<Move> {
         let p = self.config.player_turn(self.query_answer.len());
-        let past_moves: Vec<Move> = self
-            .query_answer
-            .iter()
-            .skip(p)
-            .step_by(self.config.player_num())
-            .map(|qa| qa.move_of_this())
-            .collect();
+        let past_moves: Vec<Move> = self.moves_of_player(p);
         self.config
             .all_cards()
             .into_iter()
@@ -349,22 +379,26 @@ impl abstract_game::ImperfectInfoGame for Game {
         }
 
         let m = info
-            .query_at()
+            .movable_query()
             .into_iter()
-            .chain(info.declare_at())
+            .chain(info.movable_declare())
             .collect();
         (info, m)
     }
 
     fn is_win(&self) -> Option<Vec<usize>> {
-        let p = self.player_turn();
+        if self.query_answer.is_empty() {
+            return None;
+        }
+        let last_player = self.config.player_turn(self.query_answer.len() - 1);
+        let last_player: usize = last_player.into();
         let mut v = vec![0; self.player_number()];
         if let Some(MoveAns::Declare {
             declare: _,
             ans: true,
         }) = self.query_answer.last()
         {
-            v[p] = 1;
+            v[last_player] = 1;
             Some(v)
         } else {
             None

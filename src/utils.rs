@@ -1,5 +1,5 @@
 use super::defs::*;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 pub fn default_config() -> GameConfig {
     crate::defs::GameConfig::new(
@@ -50,7 +50,7 @@ pub fn answerable(
         query_answer,
         view,
     }: Info,
-) -> Option<HashSet<Card>> {
+) -> Option<BTreeSet<Card>> {
     let player = config.player_turn(query_answer.len());
     let possible_distr = possible_states(Info {
         config: config.clone(),
