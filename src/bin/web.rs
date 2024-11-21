@@ -589,6 +589,7 @@ enum GameSceneMsg {
 struct GameSceneProps {
     config: GameConfig,
     play_setting: PlaySetting,
+    game_end: Callback<Game>,
 }
 
 impl Component for GameScene {
@@ -598,6 +599,7 @@ impl Component for GameScene {
         let GameSceneProps {
             config,
             play_setting,
+            game_end: _,
         } = ctx.props();
         let callback = ctx.link().callback(|_| GameSceneMsg::OtherMove);
         let other_players = play_setting
@@ -616,24 +618,20 @@ impl Component for GameScene {
         let GameSceneProps {
             config: _,
             play_setting,
+            game_end: _,
         } = ctx.props();
         let move_callback = ctx.link().callback(GameSceneMsg::Move);
 
         let Info {
             config,
             query_answer,
-            view,
+            view: _, // この view はいまプレイしている人の view なので使ってはいけない。
         } = self.game.info_and_move_now().0;
 
-        let as_player = self.as_player;
+        // player の view はこれ
+        let view = self.game.view_from_player(self.as_player);
 
-        let if_win = if let Some(p) = self.game.is_win() {
-            log(format!("{p:?}"));
-            let p: Player = p.into_iter().position_max().unwrap().into();
-            html! {<> {"勝者："} <PlayerRepView player={p} play_setting={play_setting.clone()}/> </> }
-        } else {
-            html! {}
-        };
+        let as_player = self.as_player;
 
         let who_turn = {
             let turn = self.game.player_turn();
@@ -647,14 +645,18 @@ impl Component for GameScene {
             <MoveView as_player={as_player} config={config.clone()} callback={move_callback}/>
             {who_turn}
             <HistoryView history={query_answer} play_setting={play_setting.clone()} config={config.clone()}/>
-            {if_win}
             </>
         }
     }
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         let as_player = self.as_player;
         let who_turn = self.game.player_turn();
         log(format!("{msg:?} {who_turn} {as_player}"));
+        let GameSceneProps {
+            config: _,
+            play_setting: _,
+            game_end,
+        } = ctx.props();
         match msg {
             GameSceneMsg::Move(m) if who_turn == as_player => {
                 let b = self.game.move_game(m);
@@ -671,13 +673,32 @@ impl Component for GameScene {
             }
             _ => {}
         }
+        if let Some(win) = self.game.is_win() {
+            game_end.emit(self.game.clone())
+        }
         true
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Properties)]
+struct EndSceneProps {}
+
+#[function_component(EndScene)]
+fn endscene(EndSceneProps {}: &EndSceneProps) -> Html {
+    // let if_win = if let Some(p) = self.game.is_win() {
+    //     log(format!("{p:?}"));
+    //     let p: Player = p.into_iter().position_max().unwrap().into();
+    //     html! {<> {"勝者："} <PlayerRepView player={p} play_setting={play_setting.clone()}/> </> }
+    // } else {
+    //     html! {}
+    // };
+    html! {}
 }
 
 enum Scene {
     Setting,
     Game,
+    End(Distr, Vec<usize>, Vec<MoveAns>),
 }
 
 struct App {
@@ -691,6 +712,7 @@ struct Props {}
 
 enum Msg {
     GameStart((GameConfig, PlaySetting)),
+    GameEnd(Game),
 }
 
 impl Component for App {
@@ -713,7 +735,50 @@ impl Component for App {
             }
             Scene::Game => {
                 html! {
-                    <GameScene config={self.config.clone()} play_setting={self.play_setting.clone()} />
+                    <GameScene config={self.config.clone()} play_setting={self.play_setting.clone()} game_end={ctx.link().callback(Msg::GameEnd)}/>
+                }
+            }
+            Scene::End(distr, win, history) => {
+                let config = self.config.clone();
+                let as_player = self.play_setting.as_player;
+                let play_setting = self.play_setting.clone();
+                let view = distr.cards_from_player(as_player);
+                let winner = {
+                    let winner: Player = win
+                        .iter()
+                        .find_position(|point| **point != 0)
+                        .unwrap()
+                        .0
+                        .into();
+                    html! {
+                        <>
+                            {"勝者："} <PlayerRepView play_setting={play_setting.clone()} player={winner}/>  <br/>
+                        </>
+                    }
+                };
+
+                let mut h = vec![];
+                for p in config.all_player() {
+                    let head = distr.players_head(p);
+                    let hand = distr.players_hand(p);
+                    h.push(html!{
+                        <>
+                            <PlayerRepView play_setting={play_setting.clone()} player={p}/> {"..."}
+                            {"頭："} {for head.iter().map(|c| html!{<CardView config={config.clone()} card={*c}/>})} {"、"}
+                            {"手元："} {for hand.iter().map(|c| html!{<CardView config={config.clone()} card={*c}/>})} {"、"}
+                        <br/>
+                        </>
+                    });
+                }
+
+                html! {
+                    <>
+                    <GameConfigView config={config.clone()}/>
+                    <PlayerView config={config.clone()} view={view}/>
+                    <HistoryView history={history.clone()} play_setting={self.play_setting.clone()} config={config.clone()}/>
+                    {winner}
+                    {h}
+                    </>
                 }
             }
         }
@@ -724,6 +789,10 @@ impl Component for App {
                 self.config = config;
                 self.play_setting = play_setting;
                 self.scene = Scene::Game;
+                true
+            }
+            Msg::GameEnd(game) => {
+                self.scene = Scene::End(game.distr(), game.is_win().unwrap(), game.history());
                 true
             }
         }

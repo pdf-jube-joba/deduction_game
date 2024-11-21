@@ -337,6 +337,18 @@ pub struct Game {
     query_answer: Vec<MoveAns>,
 }
 
+impl Game {
+    pub fn view_from_player(&self, player: Player) -> View {
+        self.distr.cards_from_player(player)
+    }
+    pub fn distr(&self) -> Distr {
+        self.distr.clone()
+    }
+    pub fn history(&self) -> Vec<MoveAns> {
+        self.query_answer.clone()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Info {
     pub config: GameConfig,
