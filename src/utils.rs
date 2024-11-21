@@ -3,7 +3,7 @@ use itertools::Itertools;
 use crate::abstract_game::Player;
 
 use super::defs::*;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 pub fn default_config() -> GameConfig {
     crate::defs::GameConfig::new(
@@ -186,6 +186,23 @@ pub fn movable_query_ref<'a>(
     })
 }
 
+pub fn possible_head_numed(
+    config: &GameConfig,
+    query_answer: &Vec<MoveAns>,
+    view: &View,
+) -> HashMap<BTreeSet<Card>, usize> {
+    let player = config.player_turn(query_answer.len());
+    let possible_distr = possible_states(config, query_answer, view);
+    let mut maps = HashMap::new();
+    for distr in possible_distr {
+        let head = distr.players_head(player);
+        maps.entry(head.clone())
+            .and_modify(|v| *v += 1)
+            .or_insert(0);
+    }
+    maps
+}
+
 pub fn answerable(config: &GameConfig, query_answer: &Vec<MoveAns>, view: &View) -> Option<Move> {
     let player = config.player_turn(query_answer.len());
     let possible_distr = possible_states(config, query_answer, view);
@@ -242,6 +259,8 @@ mod tests {
         }
 
         let _ = answerable(&info.config, &info.query_answer, &info.view);
+        let heads = possible_head_numed(&info.config, &info.query_answer, &info.view);
+        eprintln!("{heads:?}");
 
         // let config = three_midium();
         // eprintln!("{config:?}");

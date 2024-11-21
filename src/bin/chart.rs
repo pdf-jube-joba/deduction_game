@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use game::abstract_game::*;
-use game::agent::{Opponent, RandomPlayer, SearchPlayer, UseEntropyPlayer};
+use game::agent::{Opponent, RandomPlayer, SearchPlayer, Unfair, UseEntropyPlayer};
 use game::defs::GameConfig;
 use game::utils::*;
 use indicatif::ProgressBar;
@@ -30,9 +30,9 @@ fn test_player_with_config(config: GameConfig, mut players: Vec<Opponent>) -> us
     i
 }
 
-const LOOP: usize = 300;
+const LOOP: usize = 1000;
 const EXPECT_MAX_TURN: usize = 50;
-const EXPECT_MAX_LEN: usize = 200;
+const EXPECT_MAX_LEN: usize = 600;
 
 fn rec<T>(n: usize, ps: &[T]) -> Vec<Vec<T>>
 where
@@ -54,30 +54,31 @@ where
     }
 }
 
+fn print_one(opp: &Opponent) -> &str {
+    match opp {
+        Opponent::Entoropy(_) => "entoropy",
+        Opponent::RandomThreadRng(_) => "random",
+        Opponent::Unfair(_) => "unfair",
+        Opponent::RandomSmallRng(_) => unreachable!(),
+        Opponent::SearchPlayer(_) => "search",
+    }
+}
+
 fn main() {
     let ps: Vec<Opponent> = vec![
-        // Opponent::Random(RandomPlayer::new(SmallRng::from_entropy())),
         Opponent::RandomThreadRng(RandomPlayer::default()),
         Opponent::Entoropy(UseEntropyPlayer),
-        Opponent::SearchPlayer(SearchPlayer::new(3)),
+        Opponent::Unfair(Unfair::new(0.4)),
     ];
 
     let config = default_config();
     let num = config.player_num();
 
     for players in rec(num, &ps) {
-        let print = |opp: &Vec<Opponent>| -> String {
-            opp.iter()
-                .map(|opp| match opp {
-                    Opponent::Entoropy(_) => "entoropy",
-                    Opponent::RandomThreadRng(_) => "random",
-                    Opponent::RandomSmallRng(_) => unreachable!(),
-                    Opponent::SearchPlayer(_) => "search",
-                })
-                .join("_")
-        };
+        let print = |opp: &Vec<Opponent>| -> String { opp.iter().map(print_one).join("_") };
 
-        eprintln!("{}", print(&players));
+        eprintln!("start");
+
         let mut data: Vec<usize> = vec![];
         let bar = ProgressBar::new(LOOP as u64);
         for _ in 0..LOOP {
@@ -125,7 +126,10 @@ fn main() {
             win[t % config.player_num()] += 1;
         }
 
-        eprintln!("{win:?}");
+        for i in 0..config.player_num() {
+            eprint!("{}:{},", print_one(&players[i]), win[i])
+        }
+        eprintln!();
 
         root.present().unwrap();
     }
