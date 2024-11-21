@@ -116,6 +116,50 @@ where
     }
 }
 
+pub fn entoropy(info: Info) -> Option<Move> {
+    let who = info.player_turn();
+    let distrs: Vec<_> = possible_states(&info.config, &info.query_answer, &info.view).collect();
+
+    info.movable_query()
+        .into_iter()
+        .filter_map(|q| {
+            let mut distribution = vec![0; info.config.cards_num()];
+
+            for distr in &distrs {
+                let MoveAns::Query {
+                    who: _,
+                    query_to: _,
+                    query_sort: _,
+                    ans,
+                } = answer(&info.config, distr, q.clone(), who)
+                else {
+                    unreachable!()
+                };
+                distribution[ans] += 1;
+            }
+            // この質問をして意味があるか
+            let mut k = 0;
+
+            let mut entropy: f64 = 0_f64;
+            for i in distribution {
+                if i == 0 {
+                    continue;
+                }
+                k += 1;
+                entropy += ((i as f64) / (distrs.len() as f64)) * (i as f64).log2();
+            }
+
+            // k > 1 なら質問をすると分類ができるが、できないものは質問しても仕方ないので選択肢から省く。
+            if k > 1 {
+                Some((entropy, q))
+            } else {
+                None
+            }
+        })
+        .min_by(|(entropy1, _), (entropy2, _)| entropy1.partial_cmp(entropy2).unwrap())
+        .map(|(_, m)| m.clone())
+}
+
 // 現在の履歴から可能な状態の全体を考え、各 query に対して可能な状態の回答の分布のエントロピーを計算する。
 // 一番エントロピーが低いと、情報量がより得られているので、その手を選ぶ。
 #[derive(Debug, Clone, PartialEq)]
@@ -137,11 +181,12 @@ impl Agent for UseEntropyPlayer {
         if let Some(answer) = answerable_info(&info) {
             return answer;
         }
+
         let who = info.player_turn();
         let distrs: Vec<_> =
             possible_states(&info.config, &info.query_answer, &info.view).collect();
 
-        assert!(!distrs.is_empty());
+        debug_assert!(!distrs.is_empty());
 
         if let Some((_, q)) = info
             .movable_query()
@@ -227,8 +272,9 @@ pub fn search_rec(
     depth: usize,
     movables: &Vec<HashSet<Move>>,
 ) -> Option<(Move, Vec<f64>)> {
+    let player_num = config.player_num();
     if let Some(answer) = answerable(config, query_answer, view) {
-        let mut v = vec![0_f64; config.player_num()];
+        let mut v = vec![0_f64; player_num];
         v[0] = 1_f64;
         return Some((answer, v));
     }
@@ -240,39 +286,40 @@ pub fn search_rec(
         let next_player = config.player_turn(query_answer.len() + 1);
         let possible_state: Vec<_> = possible_states(config, query_answer, view).collect();
         let state_len = possible_state.len();
-        let m = movables[usize::from(now_player)]
-            .iter()
-            .map(|m| {
-                let mut points = vec![0_f64; config.player_num()];
-                for distr in possible_state.clone() {
-                    let ans = answer(config, &distr, m.clone(), now_player);
-                    query_answer.push(ans);
-                    let view = distr.cards_from_player(next_player);
-                    let a = search_rec(config, query_answer, &view, depth - 1, movables);
-                    query_answer.pop();
-                    let Some((_, mut point)) = a else {
-                        continue;
-                    };
-                    point.rotate_right(1);
-                    for i in 0..config.player_num() {
-                        points[i] += point[i] / state_len as f64;
+
+        let mut min: Option<(&Move, Vec<f64>)> = None;
+        for m in &movables[usize::from(now_player)] {
+            let mut points = vec![0_f64; player_num];
+            for distr in &possible_state {
+                let ans = answer(config, distr, m.clone(), now_player);
+                query_answer.push(ans);
+                let view = distr.cards_from_player(next_player);
+                let res = search_rec(config, query_answer, &view, depth - 1, movables);
+                query_answer.pop();
+                let Some((_, mut point)) = res else {
+                    continue;
+                };
+                point.rotate_right(1);
+                for i in 0..player_num {
+                    points[i] += point[i];
+                }
+            }
+
+            for v in points.iter_mut() {
+                *v /= state_len as f64;
+            }
+
+            match &min {
+                None => min = Some((m, points)),
+                Some(x) => {
+                    if x.1[0] <= points[0] {
+                        min = Some((m, points))
                     }
                 }
-                (m, points)
-            })
-            .max_by(|m1, m2| {
-                if m1.1[0] < m2.1[0] {
-                    std::cmp::Ordering::Less
-                } else {
-                    std::cmp::Ordering::Greater
-                }
-            })
-            .map(|(m, p)| (m.clone(), p));
-        if let Some((m, _)) = &m {
-            let now_player: usize = now_player.into();
-            assert!(movables[now_player].contains(m));
+            }
         }
-        m
+
+        min.map(|(m, v)| (m.clone(), v))
     }
 }
 
