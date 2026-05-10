@@ -6,7 +6,7 @@ use game::{
 };
 use gloo::timers::callback::Interval;
 use itertools::Itertools;
-use rand::{rngs::SmallRng, thread_rng, SeedableRng};
+use rand::{random, rngs::SmallRng, SeedableRng};
 use std::collections::BTreeSet;
 use yew::prelude::*;
 
@@ -54,7 +54,7 @@ impl PlaySetting {
             *a = Some(WebOpponent::Random);
         }
         PlaySetting {
-            as_player: 0.into(),
+            as_player: 0,
             opponent_strategy,
         }
     }
@@ -82,9 +82,9 @@ fn player_rep(
     }: &PlayerRepProps,
 ) -> Html {
     if *player == play_setting.as_player {
-        html! {format!("あなた（{}）", player)}
+        html! {format!("あなた（{}）", player + 1)}
     } else {
-        html! {format!("CPU（{}）", player)}
+        html! {format!("CPU（{}）", player + 1)}
     }
 }
 
@@ -124,9 +124,9 @@ impl Component for MoveView {
         } = ctx.props().clone();
         // query to other player
         let mut other_player_htmls = vec![];
-        for i in config.all_player() {
+        for i in 0..config.player_num() {
             if i != as_player {
-                let mut htmls = vec![html! {format!("プレイヤー{}に質問する：", i)}];
+                let mut htmls = vec![html! {format!("プレイヤー{}に質問する：", i + 1)}];
                 for s in config.all_sort() {
                     let snew = s.clone();
                     let callback = callback.clone();
@@ -160,7 +160,7 @@ impl Component for MoveView {
                     classes!("notselected")
                 };
                 let card_select = html! {
-                    <button onclick={callback} class={selected_or_not_class}> {i} </button>
+                    <button onclick={callback} class={selected_or_not_class}> {i + 1} </button>
                 };
                 declare_html.push(card_select);
             }
@@ -169,7 +169,7 @@ impl Component for MoveView {
                 .declare
                 .iter()
                 .enumerate()
-                .filter_map(|(i, b)| if *b { Some(Card(i)) } else { None })
+                .filter_map(|(i, b)| if *b { Some(i) } else { None })
                 .collect();
 
             let (selectable, onclick) = if selected_num == config.head_num() {
@@ -252,7 +252,7 @@ fn history_view(
                     <PlayerRepView player={*who} play_setting={play_setting.clone()} />
                     {"の宣言："}
                     {format!("頭のカードは {} ... {}",
-                        declare.iter().map(|s| format!("{}", s.0)).join("と"),
+                        declare.iter().map(|s| format!("{}", s + 1)).join("と"),
                         if *ans {"当たり"} else {"外れ"})} <br/>
                 </>},
             };
@@ -465,7 +465,7 @@ impl Component for SettingScene {
             .collect();
 
         let mut h: Vec<Html> = vec![];
-        for i in self.config.all_player() {
+        for i in 0..self.config.player_num() {
             if i == self.play_setting.as_player {
                 h.push(html! {
                     <tr>
@@ -608,7 +608,7 @@ impl Component for GameScene {
             .map(|o| o.as_ref().map(|o| map_opp(*o)))
             .collect();
         Self {
-            game: config.gen_random(&mut thread_rng()),
+            game: config.gen_random(random()),
             as_player: play_setting.as_player,
             other_players,
             interval: Interval::new(1000, move || callback.emit(())),
@@ -742,7 +742,7 @@ impl Component for App {
                 let config = self.config.clone();
                 let as_player = self.play_setting.as_player;
                 let play_setting = self.play_setting.clone();
-                let view = distr.cards_from_player(as_player);
+                let view = cards_from_player(distr, as_player);
                 let winner = {
                     let winner: Player = win
                         .iter()
@@ -758,9 +758,9 @@ impl Component for App {
                 };
 
                 let mut h = vec![];
-                for p in config.all_player() {
-                    let head = distr.players_head(p);
-                    let hand = distr.players_hand(p);
+                for p in 0..config.player_num() {
+                    let head = players_head(distr, p);
+                    let hand = players_hand(distr, p);
                     h.push(html!{
                         <>
                             <PlayerRepView play_setting={play_setting.clone()} player={p}/> {"..."}

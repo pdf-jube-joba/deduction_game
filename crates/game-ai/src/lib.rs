@@ -1,27 +1,25 @@
-pub mod abstract_game;
 pub mod agent;
-pub mod defs;
-pub mod utils;
+
+pub use agent::*;
 
 #[cfg(test)]
 mod tests {
-    use super::agent::{RandomPlayer, UseEntropyPlayer};
-    use super::utils::default_config;
-    use crate::abstract_game::*;
-    use crate::defs::{Game, GameConfig};
-    use rand::thread_rng;
+    use crate::{RandomPlayer, UseEntropyPlayer};
+    use game_core::abstract_game::*;
+    use game_core::defs::{Game, GameConfig};
+    use game_core::utils::default_config;
+    use rand::random;
 
     fn test_player_with_config(
         config: GameConfig,
         mut players: Vec<Box<dyn Agent<Game = Game>>>,
     ) -> usize {
-        let mut rng = thread_rng();
-        let mut game = GameConfig::gen_random(&config, &mut rng);
+        let mut game = GameConfig::gen_random(&config, random());
         assert_eq!(players.len(), config.player_num());
         eprintln!("{game:?}");
         let mut i = 0;
         while game.is_win().is_none() {
-            let player: usize = game.player_turn().into();
+            let player = game.player_turn();
             let agent = &mut players[player];
             let info = game.info_and_move_now();
             let m = agent.use_info(info.0, info.1);
@@ -57,6 +55,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "search-style test that can take a long time to find a 4-move game"]
     fn find4() {
         let config = default_config();
 
