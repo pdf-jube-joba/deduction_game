@@ -1,11 +1,11 @@
 use game::abstract_game::*;
-use rand::thread_rng;
+use rand::random;
 
 fn main() {
     #[cfg(target_arch = "x86_64")]
     {
         let config = game::utils::default_config();
-        let mut game = config.gen_random(&mut thread_rng());
+        let mut game = config.gen_random(random());
         let user = game::agent::CUIUser;
         let agent1 = game::agent::RandomPlayer::default();
         let agent2 = game::agent::RandomPlayer::default();

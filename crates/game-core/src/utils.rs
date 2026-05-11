@@ -6,10 +6,10 @@ use super::defs::*;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 pub fn default_config() -> GameConfig {
-    crate::defs::GameConfig::new(
+    GameConfig::new(
         vec!["A", "B", "X", "Y", "Z"]
             .into_iter()
-            .map(|str| Sort(str.to_string()))
+            .map(|str| str.to_string())
             .collect(),
         vec![
             vec!["A", "X"],
@@ -20,7 +20,7 @@ pub fn default_config() -> GameConfig {
             vec!["B", "Z"],
         ]
         .into_iter()
-        .map(|v| v.into_iter().map(|s| Sort(s.to_string())).collect())
+        .map(|v| v.into_iter().map(|s| s.to_string()).collect())
         .collect(),
         3,
         1,
@@ -30,10 +30,10 @@ pub fn default_config() -> GameConfig {
 }
 
 pub fn three_midium() -> GameConfig {
-    crate::defs::GameConfig::new(
+    GameConfig::new(
         vec!["A", "B", "C", "X", "Y", "Z", "W"]
             .into_iter()
-            .map(|str| Sort(str.to_string()))
+            .map(|str| str.to_string())
             .collect(),
         vec![
             vec!["A", "X"],
@@ -50,7 +50,7 @@ pub fn three_midium() -> GameConfig {
             vec!["C", "W"],
         ]
         .into_iter()
-        .map(|v| v.into_iter().map(|s| Sort(s.to_string())).collect())
+        .map(|v| v.into_iter().map(|s| s.to_string()).collect())
         .collect(),
         3,
         2,
@@ -60,10 +60,10 @@ pub fn three_midium() -> GameConfig {
 }
 
 pub fn four_midium() -> GameConfig {
-    crate::defs::GameConfig::new(
+    GameConfig::new(
         vec!["A", "B", "C", "X", "Y", "Z", "W"]
             .into_iter()
-            .map(|str| Sort(str.to_string()))
+            .map(|str| str.to_string())
             .collect(),
         vec![
             vec!["A", "X"],
@@ -80,7 +80,7 @@ pub fn four_midium() -> GameConfig {
             vec!["C", "W"],
         ]
         .into_iter()
-        .map(|v| v.into_iter().map(|s| Sort(s.to_string())).collect())
+        .map(|v| v.into_iter().map(|s| s.to_string()).collect())
         .collect(),
         4,
         2,
@@ -109,7 +109,7 @@ pub fn possible_states<'a>(
         .collect();
 
     let n = not_in_view.len();
-    let all_player = config.all_player();
+    let all_player = 0..config.player_num();
     let (head_num, hand_num) = (config.head_num(), config.hand_num());
 
     not_in_view
@@ -131,7 +131,6 @@ pub fn possible_states<'a>(
                 let (head, hand) = if p == player {
                     (perm_consume(head_num), view.hand.clone())
                 } else {
-                    let p: usize = p.into();
                     (
                         view.other[p].as_ref().unwrap().clone(),
                         perm_consume(hand_num),
@@ -139,7 +138,7 @@ pub fn possible_states<'a>(
                 };
                 state.push(PlCard { head, hand })
             }
-            Distr::new(state)
+            state
         })
         .filter(move |distr| {
             query_answer.iter().all(|qa| {
@@ -195,7 +194,7 @@ pub fn possible_head_numed(
     let possible_distr = possible_states(config, query_answer, view);
     let mut maps = HashMap::new();
     for distr in possible_distr {
-        let head = distr.players_head(player);
+        let head = players_head(&distr, player);
         maps.entry(head.clone())
             .and_modify(|v| *v += 1)
             .or_insert(0);
@@ -208,7 +207,7 @@ pub fn answerable(config: &GameConfig, query_answer: &Vec<MoveAns>, view: &View)
     let possible_distr = possible_states(config, query_answer, view);
     let mut heads = possible_distr
         .into_iter()
-        .map(|distr| distr.players_head(player).clone());
+        .map(|distr| players_head(&distr, player).clone());
     let Some(head) = heads.next() else {
         unreachable!("頭にちゃんとカードはあるはず");
     };
@@ -240,8 +239,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::thread_rng;
-
     use crate::abstract_game::ImperfectInfoGame;
 
     use super::*;
@@ -249,7 +246,7 @@ mod tests {
     fn test() {
         let config = default_config();
         // eprintln!("{config:?}");
-        let game = config.gen_random(&mut thread_rng());
+        let game = config.gen_random(0);
         // eprintln!("{game:?}");
         let info = game.info_and_move_now().0;
         // eprintln!("{info:?}");
@@ -264,14 +261,14 @@ mod tests {
 
         // let config = three_midium();
         // eprintln!("{config:?}");
-        // let game = config.gen_random(&mut thread_rng());
+        // let game = config.gen_random(0);
         // eprintln!("{game:?}");
         // let info = game.info_and_move_now();
         // eprintln!("{info:?}");
 
         // let config = four_midium();
         // eprintln!("{config:?}");
-        // let game = config.gen_random(&mut thread_rng());
+        // let game = config.gen_random(0);
         // eprintln!("{game:?}");
         // let info = game.info_and_move_now();
         // eprintln!("{info:?}");
