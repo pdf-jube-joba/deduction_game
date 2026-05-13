@@ -1,5 +1,6 @@
 use crate::abstract_game::{self, Player};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 // type of sort
@@ -8,7 +9,7 @@ pub type Sort = String;
 /// Card(i) があるなら j < i に対して Card(j) もあること
 pub type Card = usize;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameConfig {
     sorts: BTreeSet<Sort>,
     cards_sort: Vec<BTreeSet<Sort>>,
@@ -74,7 +75,7 @@ impl GameConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlCard {
     pub hand: BTreeSet<Card>,
     pub head: BTreeSet<Card>,
@@ -82,7 +83,7 @@ pub struct PlCard {
 
 pub type Distr = Vec<PlCard>; // distr[i] = player i's hand and head
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct View {
     pub hand: BTreeSet<Card>,
     pub other: Vec<Option<BTreeSet<Card>>>,
@@ -165,13 +166,13 @@ pub fn cards_from_player(distr: &Distr, player: Player) -> View {
     View { hand, other }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Move {
     Query { query_to: Player, query_sort: Sort }, // 同じ質問はできない。
     Declare { declare: BTreeSet<Card> },          // 全てのソートについて回答している必要がある。
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum MoveAns {
     Query {
         who: Player,
@@ -260,7 +261,7 @@ pub fn all_query(config: &GameConfig) -> impl Iterator<Item = Move> {
     })
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Game {
     config: GameConfig,
     distr: Distr,
@@ -279,7 +280,7 @@ impl Game {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Info {
     pub config: GameConfig,
     pub query_answer: Vec<MoveAns>,
@@ -368,8 +369,7 @@ impl abstract_game::ImperfectInfoGame for Game {
             ans: true,
         }) = self.query_answer.last()
         {
-            let who: usize = (*who).into();
-            v[who] = 1;
+            v[*who] = 1;
             Some(v)
         } else {
             None

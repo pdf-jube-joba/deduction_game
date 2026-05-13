@@ -84,6 +84,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "cli"
+version = "0.1.0"
+dependencies = [
+ "game-ai",
+ "game-core",
+ "proconio",
+ "rand",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "console_error_panic_hook"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -198,21 +210,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "game"
-version = "0.1.0"
-dependencies = [
- "game-ai",
- "game-core",
- "gloo 0.11.0",
- "itertools",
- "proconio",
- "rand",
- "wasm-bindgen",
- "web-sys",
- "yew",
-]
-
-[[package]]
 name = "game-ai"
 version = "0.1.0"
 dependencies = [
@@ -226,6 +223,21 @@ version = "0.1.0"
 dependencies = [
  "itertools",
  "rand",
+ "serde",
+]
+
+[[package]]
+name = "game-web"
+version = "0.1.0"
+dependencies = [
+ "game-ai",
+ "game-core",
+ "gloo 0.11.0",
+ "itertools",
+ "rand",
+ "wasm-bindgen",
+ "web-sys",
+ "yew",
 ]
 
 [[package]]

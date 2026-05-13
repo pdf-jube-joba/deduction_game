@@ -237,6 +237,23 @@ where
     v.into_iter().nth(i).unwrap()
 }
 
+pub fn auto_game<G>(mut game: G, mut agents: Vec<Box<dyn crate::abstract_game::Agent<Game = G>>>) -> Vec<usize>
+where
+    G: crate::abstract_game::ImperfectInfoGame,
+{
+    assert_eq!(agents.len(), game.player_number());
+    while game.is_win().is_none() {
+        let p = game.player_turn();
+        let info_move = game.info_and_move_now();
+        let m = agents[p].use_info(info_move.0, info_move.1);
+        if !game.move_game(m) {
+            panic!("動けるやつにして");
+        }
+    }
+    game.is_win().unwrap()
+}
+
+
 #[cfg(test)]
 mod tests {
     use crate::abstract_game::ImperfectInfoGame;

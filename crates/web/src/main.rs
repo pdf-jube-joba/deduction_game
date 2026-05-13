@@ -1,6 +1,6 @@
-use game::{
+use game_ai::*;
+use game_core::{
     abstract_game::{Agent, ImperfectInfoGame, Player},
-    agent::*,
     defs::*,
     utils::{default_config, four_midium, three_midium},
 };
@@ -122,7 +122,6 @@ impl Component for MoveView {
             config,
             callback,
         } = ctx.props().clone();
-        // query to other player
         let mut other_player_htmls = vec![];
         for i in 0..config.player_num() {
             if i != as_player {
@@ -145,7 +144,6 @@ impl Component for MoveView {
             };
         }
 
-        // declare cards
         let (declare_html, html2) = {
             let mut declare_html = vec![];
             let mut selected_num = 0;
@@ -625,10 +623,9 @@ impl Component for GameScene {
         let Info {
             config,
             query_answer,
-            view: _, // この view はいまプレイしている人の view なので使ってはいけない。
+            view: _,
         } = self.game.info_and_move_now().0;
 
-        // player の view はこれ
         let view = self.game.view_from_player(self.as_player);
 
         let as_player = self.as_player;
@@ -674,25 +671,11 @@ impl Component for GameScene {
             _ => {}
         }
         if let Some(win) = self.game.is_win() {
-            game_end.emit(self.game.clone())
+            game_end.emit(self.game.clone());
+            log(format!("winner: {win:?}"));
         }
         true
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Properties)]
-struct EndSceneProps {}
-
-#[function_component(EndScene)]
-fn endscene(EndSceneProps {}: &EndSceneProps) -> Html {
-    // let if_win = if let Some(p) = self.game.is_win() {
-    //     log(format!("{p:?}"));
-    //     let p: Player = p.into_iter().position_max().unwrap().into();
-    //     html! {<> {"勝者："} <PlayerRepView player={p} play_setting={play_setting.clone()}/> </> }
-    // } else {
-    //     html! {}
-    // };
-    html! {}
 }
 
 enum Scene {

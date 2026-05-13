@@ -1,9 +1,12 @@
 [package]
-name = "game-core"
+name = "cli"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-itertools = "0.13.0"
+game-ai = { path = "../game-ai" }
+game-core = { path = "../game-core" }
+proconio = "0.5.0"
 rand = "0.8.5"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

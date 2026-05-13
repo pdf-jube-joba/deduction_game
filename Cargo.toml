@@ -1,3 +1,8 @@
 [workspace]
-members = ["crates/game-core", "crates/game-ai", "crates/game"]
+members = [
+    "crates/game-core",
+    "crates/game-ai",
+    "crates/cli",
+    "crates/web",
+]
 resolver = "2"
