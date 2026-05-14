@@ -14,9 +14,12 @@ fn main() {
         .parse::<u16>()
         .unwrap_or_else(|_| usage_and_exit("ai <strategy> <port>"));
 
-    let joined: JoinResponse = post_json(port, "/join", &serde_json::json!({}), None)
-        .expect("failed to join game server");
-    println!("joined as player {} with strategy {}", joined.player, strategy);
+    let joined: JoinResponse =
+        post_json(port, "/join", &serde_json::json!({}), None).expect("failed to join game server");
+    println!(
+        "joined as player {} with strategy {}",
+        joined.player, strategy
+    );
     let secret = joined.secret;
 
     let mut agent = build_agent(&strategy);
@@ -38,13 +41,9 @@ fn main() {
         let info = state.info;
         let possible_moves = state.possible_moves;
         let action = agent.use_info(info, possible_moves);
-        let _response: serde_json::Value = post_json(
-            port,
-            "/move",
-            &MoveRequest { action },
-            Some(&secret),
-        )
-        .expect("failed to submit move");
+        let _response: serde_json::Value =
+            post_json(port, "/move", &MoveRequest { action }, Some(&secret))
+                .expect("failed to submit move");
     }
 }
 

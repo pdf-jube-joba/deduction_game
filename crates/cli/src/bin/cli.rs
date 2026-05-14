@@ -23,8 +23,8 @@ fn command_join(args: Vec<String>) {
     let json = parser.take_flag("--json");
     parser.finish();
 
-    let joined: JoinResponse = post_json(port, "/join", &serde_json::json!({}), None)
-        .expect("failed to join game server");
+    let joined: JoinResponse =
+        post_json(port, "/join", &serde_json::json!({}), None).expect("failed to join game server");
 
     if json {
         println!(
@@ -75,13 +75,9 @@ fn command_move(args: Vec<String>) {
     let action = parse_move(&mut parser);
     parser.finish();
 
-    let response: serde_json::Value = post_json(
-        port,
-        "/move",
-        &MoveRequest { action },
-        Some(&secret),
-    )
-    .expect("failed to submit move");
+    let response: serde_json::Value =
+        post_json(port, "/move", &MoveRequest { action }, Some(&secret))
+            .expect("failed to submit move");
 
     if json {
         println!(
@@ -210,6 +206,8 @@ fn usage_and_exit() -> ! {
     eprintln!("  cli join <port> [--json]");
     eprintln!("  cli state <port> [--secret <secret> | --secret-file <path>] [--json]");
     eprintln!("  cli move <port> [--secret <secret> | --secret-file <path>] [--json] query <player> <sort>");
-    eprintln!("  cli move <port> [--secret <secret> | --secret-file <path>] [--json] declare <card>...");
+    eprintln!(
+        "  cli move <port> [--secret <secret> | --secret-file <path>] [--json] declare <card>..."
+    );
     std::process::exit(2);
 }

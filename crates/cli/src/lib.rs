@@ -70,9 +70,7 @@ pub fn format_move_ans(value: &MoveAns) -> String {
             query_to,
             query_sort,
             ans,
-        } => format!(
-            "player {who} asked player {query_to} about {query_sort}: {ans}"
-        ),
+        } => format!("player {who} asked player {query_to} about {query_sort}: {ans}"),
         MoveAns::Declare { who, declare, ans } => {
             format!("player {who} declared {declare:?}: {ans}")
         }
@@ -154,9 +152,8 @@ fn request_json<T: for<'de> Deserialize<'de>>(
         let error = serde_json::from_slice::<ErrorResponse>(&body)
             .map(|v| v.error)
             .unwrap_or_else(|_| String::from_utf8_lossy(&body).into_owned());
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("server returned {status_code}: {error}"),
-        ))
+        Err(io::Error::other(format!(
+            "server returned {status_code}: {error}"
+        )))
     }
 }

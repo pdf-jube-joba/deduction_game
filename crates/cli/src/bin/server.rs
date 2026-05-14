@@ -62,7 +62,9 @@ fn handle_connection(stream: TcpStream, host: Arc<Mutex<GameHost>>) -> Result<()
     }
 
     let mut body = vec![0; content_length];
-    reader.read_exact(&mut body).map_err(|err| err.to_string())?;
+    reader
+        .read_exact(&mut body)
+        .map_err(|err| err.to_string())?;
     let mut stream = reader.into_inner();
 
     let mut parts = request_line.split_whitespace();

@@ -91,7 +91,7 @@ pub fn four_midium() -> GameConfig {
 
 pub fn possible_states<'a>(
     config: &'a GameConfig,
-    query_answer: &'a Vec<MoveAns>,
+    query_answer: &'a [MoveAns],
     view: &'a View,
 ) -> impl Iterator<Item = Distr> + 'a {
     let player = config.player_turn(query_answer.len());
@@ -164,12 +164,12 @@ pub fn possible_states<'a>(
 
 pub fn movable_query_ref<'a>(
     config: &'a GameConfig,
-    query_answer: &'a Vec<MoveAns>,
+    query_answer: &'a [MoveAns],
     player: Player,
 ) -> impl Iterator<Item = Move> + 'a {
     let past_moves: HashSet<_> = query_answer
         .iter()
-        .skip(player.into())
+        .skip(player)
         .step_by(config.player_num())
         .map(|qa| qa.move_of_this())
         .collect();
@@ -187,7 +187,7 @@ pub fn movable_query_ref<'a>(
 
 pub fn possible_head_numed(
     config: &GameConfig,
-    query_answer: &Vec<MoveAns>,
+    query_answer: &[MoveAns],
     view: &View,
 ) -> HashMap<BTreeSet<Card>, usize> {
     let player = config.player_turn(query_answer.len());
@@ -202,7 +202,7 @@ pub fn possible_head_numed(
     maps
 }
 
-pub fn answerable(config: &GameConfig, query_answer: &Vec<MoveAns>, view: &View) -> Option<Move> {
+pub fn answerable(config: &GameConfig, query_answer: &[MoveAns], view: &View) -> Option<Move> {
     let player = config.player_turn(query_answer.len());
     let possible_distr = possible_states(config, query_answer, view);
     let mut heads = possible_distr
@@ -237,7 +237,10 @@ where
     v.into_iter().nth(i).unwrap()
 }
 
-pub fn auto_game<G>(mut game: G, mut agents: Vec<Box<dyn crate::abstract_game::Agent<Game = G>>>) -> Vec<usize>
+pub fn auto_game<G>(
+    mut game: G,
+    mut agents: Vec<Box<dyn crate::abstract_game::Agent<Game = G>>>,
+) -> Vec<usize>
 where
     G: crate::abstract_game::ImperfectInfoGame,
 {
@@ -252,7 +255,6 @@ where
     }
     game.is_win().unwrap()
 }
-
 
 #[cfg(test)]
 mod tests {

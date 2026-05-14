@@ -227,7 +227,7 @@ pub fn search_rec(
         let state_len = possible_state.len();
 
         let mut min: Option<(&Move, Vec<f64>)> = None;
-        for m in &movables[usize::from(now_player)] {
+        for m in &movables[now_player] {
             let mut points = vec![0_f64; player_num];
             for distr in &possible_state {
                 let ans = answer(config, distr, m.clone(), now_player);
