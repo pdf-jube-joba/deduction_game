@@ -1,0 +1,32 @@
+name = "deduction_game"
+
+[serve]
+port = 3940
+plugin_url_prefix = "/.plugin"
+policy_url_prefix = "/.policy"
+info_url_prefix = "/.info"
+
+[[policy]]
+path = "."
+GET = ["local_browser"]
+POST = ["local_browser"]
+PUT = ["local_browser"]
+DELETE = ["local_browser"]
+
+[ignore]
+paths = [
+  ".git",
+  ".agents",
+  ".codex",
+  ".vscode",
+  "_wfs",
+  "target",
+  "dist",
+  "plot",
+]
+
+[[plugin]]
+name = "md-preview"
+runner = "default"
+allow = ["local_browser"]
+mount = "/md/"

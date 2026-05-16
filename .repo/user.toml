@@ -1,0 +1,15 @@
+[[repository]]
+name = "local"
+mode = "spawn"
+client_port = 3000
+as = "local_browser"
+
+[repository.server]
+port = 3001
+
+[[task]]
+name = "md"
+
+[[task.step]]
+repository = "local"
+plugin = "md-preview"
