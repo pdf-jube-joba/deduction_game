@@ -6,8 +6,8 @@ pub use agent::*;
 mod tests {
     use crate::{RandomPlayer, UseEntropyPlayer};
     use game_core::abstract_game::*;
+    use game_core::config::default_config;
     use game_core::defs::{Game, GameConfig};
-    use game_core::utils::default_config;
 
     fn test_player_with_config(
         config: GameConfig,

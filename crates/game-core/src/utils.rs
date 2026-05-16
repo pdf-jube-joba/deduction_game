@@ -5,90 +5,6 @@ use crate::abstract_game::Player;
 use super::defs::*;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-pub fn default_config() -> GameConfig {
-    GameConfig::new(
-        vec!["A", "B", "X", "Y", "Z"]
-            .into_iter()
-            .map(|str| str.to_string())
-            .collect(),
-        vec![
-            vec!["A", "X"],
-            vec!["A", "Y"],
-            vec!["A", "Z"],
-            vec!["B", "X"],
-            vec!["B", "Y"],
-            vec!["B", "Z"],
-        ]
-        .into_iter()
-        .map(|v| v.into_iter().map(|s| s.to_string()).collect())
-        .collect(),
-        3,
-        1,
-        1,
-    )
-    .unwrap()
-}
-
-pub fn three_midium() -> GameConfig {
-    GameConfig::new(
-        vec!["A", "B", "C", "X", "Y", "Z", "W"]
-            .into_iter()
-            .map(|str| str.to_string())
-            .collect(),
-        vec![
-            vec!["A", "X"],
-            vec!["B", "X"],
-            vec!["C", "X"],
-            vec!["A", "Y"],
-            vec!["B", "Y"],
-            vec!["C", "Y"],
-            vec!["A", "Z"],
-            vec!["B", "Z"],
-            vec!["C", "Z"],
-            vec!["A", "W"],
-            vec!["B", "W"],
-            vec!["C", "W"],
-        ]
-        .into_iter()
-        .map(|v| v.into_iter().map(|s| s.to_string()).collect())
-        .collect(),
-        3,
-        2,
-        2,
-    )
-    .unwrap()
-}
-
-pub fn four_midium() -> GameConfig {
-    GameConfig::new(
-        vec!["A", "B", "C", "X", "Y", "Z", "W"]
-            .into_iter()
-            .map(|str| str.to_string())
-            .collect(),
-        vec![
-            vec!["A", "X"],
-            vec!["B", "X"],
-            vec!["C", "X"],
-            vec!["A", "Y"],
-            vec!["B", "Y"],
-            vec!["C", "Y"],
-            vec!["A", "Z"],
-            vec!["B", "Z"],
-            vec!["C", "Z"],
-            vec!["A", "W"],
-            vec!["B", "W"],
-            vec!["C", "W"],
-        ]
-        .into_iter()
-        .map(|v| v.into_iter().map(|s| s.to_string()).collect())
-        .collect(),
-        4,
-        2,
-        1,
-    )
-    .unwrap()
-}
-
 pub fn possible_states<'a>(
     config: &'a GameConfig,
     query_answer: &'a [MoveAns],
@@ -258,6 +174,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::config::default_config;
     use crate::abstract_game::ImperfectInfoGame;
 
     use super::*;

@@ -1,6 +1,6 @@
 use cli::{host::GameHost, ErrorResponse, MoveRequest};
+use game_core::config::default_config;
 use game_core::defs::Move;
-use game_core::utils::default_config;
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
