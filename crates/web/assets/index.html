@@ -1,116 +1,200 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Deduction Game Web</title>
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <main class="page">
-      <section class="hero">
-        <p class="eyebrow">Deduction Game</p>
-        <h1>Seed と AI 指定で即座に始める</h1>
-        <p class="lede">
-          描画は薄く、通信相手は自分だけ。WASM 側の状態をそのまま見ながら進めるための最小フロントです。
-        </p>
-      </section>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Deduction Game Web</title>
+        <link rel="stylesheet" href="./styles.css" />
+    </head>
+    <body>
+        <main class="page">
+            <section class="hero">
+                <h1>deduction game</h1>
+            </section>
 
-      <section class="panel">
-        <h2>Game Start</h2>
-        <form id="start-form" class="stack">
-          <label class="field">
-            <span>Seed</span>
-            <input id="seed" name="seed" type="number" min="0" value="0" />
-          </label>
+            <section class="panel">
+                <h2>Rules</h2>
+                <ol>
+                    <li>自分の頭にあるカードを当てる推理ゲームです。</li>
+                    <li>
+                        各プレイヤーは手札と頭にカードを持っていて、一部見えないカードがあります。
+                    </li>
+                    <ol>
+                        <li>自分の手札カードは見えます。</li>
+                        <li>自分の頭にあるカードは見えません。</li>
+                        <li>他プレイヤーの手札カードは見えません。</li>
+                        <li>他プレイヤーの頭にあるカードは見えます。</li>
+                    </ol>
+                    <li>
+                        他のプレイヤーに質問をして、自分の頭にあるカードを推理していきます。
+                    </li>
+                    <ol>
+                        <li>自分の手番では質問か宣言を行います。</li>
+                        <li>質問の答えと宣言結果は全員で共有されます。</li>
+                        <li>同じ質問を繰り返すことはできません。</li>
+                    </ol>
+                </ol>
+            </section>
 
-          <div class="field">
-            <span>AI Players</span>
-            <div class="ai-grid">
-              <label>
-                <span>Player 1</span>
-                <select id="ai-1">
-                  <option value="random">random</option>
-                  <option value="entropy" selected>entropy</option>
-                  <option value="search">search</option>
-                  <option value="unfair">unfair</option>
-                </select>
-              </label>
-              <label>
-                <span>Player 2</span>
-                <select id="ai-2">
-                  <option value="random">random</option>
-                  <option value="entropy">entropy</option>
-                  <option value="search" selected>search</option>
-                  <option value="unfair">unfair</option>
-                </select>
-              </label>
-            </div>
-          </div>
+            <section class="panel">
+                <h2>Game Start</h2>
+                <form id="start-form" class="stack">
+                    <label class="field">
+                        <span>Seed</span>
+                        <div class="inline-field">
+                            <input
+                                id="seed"
+                                name="seed"
+                                type="number"
+                                min="0"
+                                value="0"
+                            />
+                            <button
+                                type="button"
+                                id="random-seed"
+                                class="button ghost button-square"
+                            >
+                                Random
+                            </button>
+                        </div>
+                    </label>
 
-          <div class="actions">
-            <button type="submit" class="button primary">Start Game</button>
-            <button type="button" id="refresh-state" class="button ghost">Refresh State</button>
-          </div>
-        </form>
-      </section>
+                    <label class="field">
+                        <span>Your Seat</span>
+                        <select id="user-player">
+                            <option value="0" selected>Player 0</option>
+                            <option value="1">Player 1</option>
+                            <option value="2">Player 2</option>
+                        </select>
+                    </label>
 
-      <section class="panel">
-        <div class="panel-header">
-          <h2>State</h2>
-          <span id="status-pill" class="pill idle">idle</span>
-        </div>
-        <pre id="status-message" class="message">ゲームを開始してください。</pre>
-        <div id="summary" class="summary"></div>
-        <div class="state-grid">
-          <div class="card">
-            <h3>View</h3>
-            <pre id="view-json" class="json-box"></pre>
-          </div>
-          <div class="card">
-            <h3>History</h3>
-            <pre id="history-json" class="json-box"></pre>
-          </div>
-          <div class="card wide">
-            <h3>Possible Moves</h3>
-            <div id="possible-moves" class="chip-list"></div>
-          </div>
-        </div>
-      </section>
+                    <div class="field">
+                        <span>AI Players</span>
+                        <div class="ai-grid">
+                            <label>
+                                <span id="ai-1-label">Player 1</span>
+                                <select id="ai-1">
+                                    <option value="random">random</option>
+                                    <option value="entropy" selected>
+                                        entropy
+                                    </option>
+                                    <option value="search">search</option>
+                                    <option value="unfair">unfair</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span id="ai-2-label">Player 2</span>
+                                <select id="ai-2">
+                                    <option value="random">random</option>
+                                    <option value="entropy">entropy</option>
+                                    <option value="search" selected>
+                                        search
+                                    </option>
+                                    <option value="unfair">unfair</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
 
-      <section class="panel">
-        <h2>Play Move</h2>
-        <div class="move-layout">
-          <form id="query-form" class="stack card">
-            <h3>Query</h3>
-            <label class="field">
-              <span>Target Player</span>
-              <input id="query-to" type="number" min="0" value="1" />
-            </label>
-            <label class="field">
-              <span>Sort</span>
-              <input id="query-sort" type="text" value="A" />
-            </label>
-            <button type="submit" class="button primary">Send Query</button>
-          </form>
+                    <div class="actions">
+                        <button type="submit" class="button primary">
+                            Start Game
+                        </button>
+                        <button
+                            type="button"
+                            id="refresh-state"
+                            class="button ghost"
+                        >
+                            Refresh State
+                        </button>
+                    </div>
+                </form>
+            </section>
 
-          <form id="declare-form" class="stack card">
-            <h3>Declare</h3>
-            <label class="field">
-              <span>Cards</span>
-              <input
-                id="declare-cards"
-                type="text"
-                value="0"
-                placeholder="0 1 2"
-              />
-            </label>
-            <button type="submit" class="button primary">Send Declare</button>
-          </form>
-        </div>
-      </section>
-    </main>
+            <section class="panel">
+                <h2>Game Setting</h2>
+                <div id="config-meta" class="summary summary-strong"></div>
+                <div id="all-cards" class="card-list"></div>
+            </section>
 
-    <script type="module" src="./app.js"></script>
-  </body>
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>State</h2>
+                    <span id="status-pill" class="pill idle">idle</span>
+                </div>
+                <pre id="status-message" class="message">
+ゲームを開始してください。</pre
+                >
+                <div id="summary" class="summary"></div>
+                <div class="state-grid">
+                    <div class="card">
+                        <h3>View</h3>
+                        <div class="table-wrap">
+                            <table class="view-table">
+                                <thead>
+                                    <tr>
+                                        <th>player</th>
+                                        <th>hand</th>
+                                        <th>head</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="view-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>History</h3>
+                        <pre id="history-json" class="json-box"></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2>Play Move</h2>
+                <div class="move-layout">
+                    <form id="query-form" class="stack card">
+                        <h3>Query</h3>
+                        <label class="field">
+                            <span>Target Player</span>
+                            <input
+                                id="query-to"
+                                type="number"
+                                min="0"
+                                value="1"
+                            />
+                        </label>
+                        <label class="field">
+                            <span>Sort</span>
+                            <input id="query-sort" type="text" value="A" />
+                        </label>
+                        <button type="submit" class="button primary">
+                            Send Query
+                        </button>
+                    </form>
+
+                    <form id="declare-form" class="stack card">
+                        <h3>Declare</h3>
+                        <label class="field">
+                            <span>Cards</span>
+                            <input
+                                id="declare-cards"
+                                type="text"
+                                value="0"
+                                placeholder="0 1 2"
+                            />
+                        </label>
+                        <button type="submit" class="button primary">
+                            Send Declare
+                        </button>
+                    </form>
+                </div>
+                <div class="card move-hints">
+                    <h3>Possible Moves</h3>
+                    <div id="possible-moves" class="chip-list"></div>
+                </div>
+            </section>
+        </main>
+
+        <script type="module" src="./app.js"></script>
+    </body>
 </html>

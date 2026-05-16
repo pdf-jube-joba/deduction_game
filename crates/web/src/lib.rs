@@ -65,8 +65,11 @@ pub struct WebGame {
 #[wasm_bindgen]
 impl WebGame {
     #[wasm_bindgen(constructor)]
-    pub fn new(seed: usize, ai_json: &str) -> Result<WebGame, JsValue> {
+    pub fn new(seed: usize, user_player: usize, ai_json: &str) -> Result<WebGame, JsValue> {
         let config = default_config();
+        if user_player >= config.player_num() {
+            return Err(JsValue::from_str("user player is out of range"));
+        }
         let ai = parse_ai(ai_json)?;
         if ai.len() + 1 != config.player_num() {
             return Err(JsValue::from_str("ai count must match player_num - 1"));
@@ -75,15 +78,17 @@ impl WebGame {
         let game = config.gen_random(seed);
         let mut ai_players: Vec<Option<Box<dyn Agent<Game = Game>>>> =
             (0..config.player_num()).map(|_| None).collect();
-        for (offset, strategy) in ai.into_iter().enumerate() {
-            let player = offset + 1;
+        for (player, strategy) in (0..config.player_num())
+            .filter(|player| *player != user_player)
+            .zip(ai.into_iter())
+        {
             ai_players[player] = Some(build_ai(strategy, seed, player));
         }
 
         let mut web_game = Self {
             game,
             ai_players,
-            user_player: 0,
+            user_player,
         };
         web_game.run_ai_turns()?;
         Ok(web_game)
