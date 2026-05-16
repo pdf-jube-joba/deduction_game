@@ -7,11 +7,10 @@ use game_ai_unfair::Unfair;
 use game_core::{
     abstract_game::{Agent, ImperfectInfoGame},
     config::three_midium,
-    defs::{Game, GameConfig, Move},
+    defs::{Game, GameConfig, Move, MoveAns},
 };
 use rand::{rngs::SmallRng, SeedableRng};
 use serde::Serialize;
-use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Strategy {
@@ -65,16 +64,7 @@ pub struct MatchRecord {
     pub turns: usize,
     pub elapsed_nanos: u128,
     pub agents: Vec<AgentStats>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct SummaryRow {
-    pub strategy: &'static str,
-    pub games: usize,
-    pub wins: usize,
-    pub win_rate: f64,
-    pub avg_moves: f64,
-    pub avg_think_ms: f64,
+    pub history: Vec<MoveAns>,
 }
 
 pub fn stats_config_name() -> &'static str {
@@ -126,42 +116,8 @@ pub fn run_match(config: &GameConfig, seed: usize, strategies: &[Strategy]) -> M
         turns,
         elapsed_nanos: started.elapsed().as_nanos(),
         agents: slots.into_iter().map(|slot| slot.stats).collect(),
+        history: game.history(),
     }
-}
-
-pub fn summarize_records(records: &[MatchRecord]) -> Vec<SummaryRow> {
-    let mut rows: BTreeMap<&'static str, (usize, usize, usize, u128)> = BTreeMap::new();
-    for record in records {
-        for (idx, name) in record.players.iter().enumerate() {
-            let entry = rows.entry(*name).or_insert((0, 0, 0, 0));
-            entry.0 += 1;
-            entry.1 += usize::from(record.winner[idx] != 0);
-            entry.2 += record.agents[idx].move_count;
-            entry.3 += record.agents[idx].think_nanos;
-        }
-    }
-
-    rows.into_iter()
-        .map(|(strategy, (games, wins, moves, think_nanos))| SummaryRow {
-            strategy,
-            games,
-            wins,
-            win_rate: wins as f64 / games as f64,
-            avg_moves: moves as f64 / games as f64,
-            avg_think_ms: think_nanos as f64 / games as f64 / 1_000_000.0,
-        })
-        .collect()
-}
-
-pub fn write_summary_data(rows: &[SummaryRow]) -> String {
-    let mut out = String::from("# strategy games wins win_rate avg_moves avg_think_ms\n");
-    for row in rows {
-        out.push_str(&format!(
-            "{} {} {} {:.4} {:.2} {:.3}\n",
-            row.strategy, row.games, row.wins, row.win_rate, row.avg_moves, row.avg_think_ms
-        ));
-    }
-    out
 }
 
 fn build_agent(strategy: Strategy, seed: usize, player: usize) -> Box<dyn Agent<Game = Game>> {
@@ -192,17 +148,6 @@ mod tests {
         assert_eq!(record.agents.len(), 3);
         assert_eq!(record.winner.len(), 3);
         assert!(record.turns > 0);
-    }
-
-    #[test]
-    fn summary_data_has_expected_header() {
-        let config = stats_config();
-        let records = vec![run_match(
-            &config,
-            42,
-            &[Strategy::Random, Strategy::Entropy, Strategy::Unfair],
-        )];
-        let data = write_summary_data(&summarize_records(&records));
-        assert!(data.starts_with("# strategy games wins win_rate avg_moves avg_think_ms\n"));
+        assert_eq!(record.history.len(), record.turns);
     }
 }
