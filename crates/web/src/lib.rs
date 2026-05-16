@@ -1,10 +1,10 @@
 #![allow(unexpected_cfgs)]
 
-use game_ai::{Opponent, RandomPlayer, SearchPlayer, Unfair, UseEntropyPlayer};
+use game_ai::{RandomPlayer, SearchPlayer, Unfair, UseEntropyPlayer};
 use game_core::{
     abstract_game::{Agent, ImperfectInfoGame},
+    config::default_config,
     defs::{Game, Info, Move},
-    utils::default_config,
 };
 use rand::{rngs::SmallRng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -142,11 +142,11 @@ fn parse_ai(ai_json: &str) -> Result<Vec<WebAi>, JsValue> {
 
 fn build_ai(strategy: WebAi, seed: usize, player: usize) -> Box<dyn Agent<Game = Game>> {
     match strategy {
-        WebAi::Random => Box::new(Opponent::RandomSmallRng(RandomPlayer::new(
-            SmallRng::seed_from_u64(seed as u64 + player as u64 + 1),
+        WebAi::Random => Box::new(RandomPlayer::new(SmallRng::seed_from_u64(
+            seed as u64 + player as u64 + 1,
         ))),
-        WebAi::Entropy => Box::new(Opponent::Entoropy(UseEntropyPlayer)),
-        WebAi::Search => Box::new(Opponent::SearchPlayer(SearchPlayer::new(2))),
-        WebAi::Unfair => Box::new(Opponent::Unfair(Unfair::new(0.7))),
+        WebAi::Entropy => Box::new(UseEntropyPlayer),
+        WebAi::Search => Box::new(SearchPlayer::new(2)),
+        WebAi::Unfair => Box::new(Unfair::new(0.7)),
     }
 }
