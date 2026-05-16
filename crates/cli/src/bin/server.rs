@@ -1,5 +1,5 @@
 use cli::{host::GameHost, ErrorResponse, MoveRequest};
-use game_core::config::default_config;
+use game_core::config::three_midium;
 use game_core::defs::Move;
 use std::{
     io::{BufRead, BufReader, Read, Write},
@@ -14,7 +14,7 @@ fn main() {
         .parse::<u16>()
         .unwrap_or_else(|_| usage_and_exit("server <port>"));
 
-    let host = Arc::new(Mutex::new(GameHost::new(default_config())));
+    let host = Arc::new(Mutex::new(GameHost::new(three_midium())));
     let listener = TcpListener::bind(("127.0.0.1", port)).expect("failed to bind port");
     println!("listening on http://127.0.0.1:{port}");
 

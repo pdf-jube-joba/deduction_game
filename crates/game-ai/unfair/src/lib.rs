@@ -1,10 +1,9 @@
+use game_ai_entropy::entoropy;
 use game_core::{
     abstract_game::{Agent, ImperfectInfoGame},
     defs::*,
     utils::*,
 };
-
-use super::entoropy;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Unfair {

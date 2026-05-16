@@ -1,5 +1,8 @@
 use cli::{get_json, post_json, JoinResponse, MoveRequest, StateResponse};
-use game_ai::{RandomPlayer, SearchPlayer, Unfair, UseEntropyPlayer};
+use game_ai_entropy::UseEntropyPlayer;
+use game_ai_random::RandomPlayer;
+use game_ai_search::SearchPlayer;
+use game_ai_unfair::Unfair;
 use game_core::{abstract_game::Agent, defs::Game};
 use std::{thread, time::Duration};
 

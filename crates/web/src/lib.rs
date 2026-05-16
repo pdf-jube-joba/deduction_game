@@ -1,9 +1,12 @@
 #![allow(unexpected_cfgs)]
 
-use game_ai::{RandomPlayer, SearchPlayer, Unfair, UseEntropyPlayer};
+use game_ai_entropy::UseEntropyPlayer;
+use game_ai_random::RandomPlayer;
+use game_ai_search::SearchPlayer;
+use game_ai_unfair::Unfair;
 use game_core::{
     abstract_game::{Agent, ImperfectInfoGame},
-    config::default_config,
+    config::three_midium,
     defs::{Game, Info, Move},
 };
 use rand::{rngs::SmallRng, SeedableRng};
@@ -66,7 +69,7 @@ pub struct WebGame {
 impl WebGame {
     #[wasm_bindgen(constructor)]
     pub fn new(seed: usize, user_player: usize, ai_json: &str) -> Result<WebGame, JsValue> {
-        let config = default_config();
+        let config = three_midium();
         if user_player >= config.player_num() {
             return Err(JsValue::from_str("user player is out of range"));
         }

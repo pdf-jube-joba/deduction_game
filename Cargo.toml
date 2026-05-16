@@ -2,7 +2,10 @@
 resolver = "2"
 members = [
     "crates/game-core",
-    "crates/game-ai",
+    "crates/game-ai/random",
+    "crates/game-ai/entropy",
+    "crates/game-ai/search",
+    "crates/game-ai/unfair",
     "crates/cli",
     "crates/web",
 ]

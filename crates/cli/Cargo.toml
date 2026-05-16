@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-game-ai = { path = "../game-ai" }
+game-ai-random = { path = "../game-ai/random" }
+game-ai-entropy = { path = "../game-ai/entropy" }
+game-ai-search = { path = "../game-ai/search" }
+game-ai-unfair = { path = "../game-ai/unfair" }
 game-core = { path = "../game-core" }
 proconio = "0.5.0"
 rand = "0.8.5"

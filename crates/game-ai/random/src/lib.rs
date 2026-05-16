@@ -4,8 +4,7 @@ use game_core::{
     utils::{answerable_info, random_vec},
 };
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-
-use super::time_seed;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // 必ず当てれるときは当てるがそうじゃないときは可能な手からランダムに打つ。
 #[derive(Debug, Clone, PartialEq)]
@@ -55,4 +54,11 @@ where
             random_vec(&mut self.rng, possible_moves.into_iter().collect())
         }
     }
+}
+
+fn time_seed() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or(0)
 }

@@ -1,0 +1,8 @@
+[package]
+name = "game-ai-unfair"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+game-ai-entropy = { path = "../entropy" }
+game-core = { path = "../../game-core" }

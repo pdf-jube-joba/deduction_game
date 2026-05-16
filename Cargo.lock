@@ -24,7 +24,10 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "cli"
 version = "0.1.0"
 dependencies = [
- "game-ai",
+ "game-ai-entropy",
+ "game-ai-random",
+ "game-ai-search",
+ "game-ai-unfair",
  "game-core",
  "proconio",
  "rand",
@@ -39,11 +42,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
-name = "game-ai"
+name = "game-ai-entropy"
+version = "0.1.0"
+dependencies = [
+ "game-core",
+]
+
+[[package]]
+name = "game-ai-random"
 version = "0.1.0"
 dependencies = [
  "game-core",
  "rand",
+]
+
+[[package]]
+name = "game-ai-search"
+version = "0.1.0"
+dependencies = [
+ "game-core",
+]
+
+[[package]]
+name = "game-ai-unfair"
+version = "0.1.0"
+dependencies = [
+ "game-ai-entropy",
+ "game-core",
 ]
 
 [[package]]
@@ -59,7 +84,10 @@ dependencies = [
 name = "game-web"
 version = "0.1.0"
 dependencies = [
- "game-ai",
+ "game-ai-entropy",
+ "game-ai-random",
+ "game-ai-search",
+ "game-ai-unfair",
  "game-core",
  "rand",
  "serde",

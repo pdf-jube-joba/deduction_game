@@ -1,8 +1,8 @@
 [package]
-name = "game-ai"
+name = "game-ai-random"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-game-core = { path = "../game-core" }
+game-core = { path = "../../game-core" }
 rand = { version = "0.8.5", default-features = false, features = ["alloc", "small_rng"] }
