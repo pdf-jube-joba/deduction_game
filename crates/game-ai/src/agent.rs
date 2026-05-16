@@ -5,10 +5,8 @@ use game_core::{
     defs::*,
     utils::*,
 };
-use rand::{
-    rngs::{SmallRng, ThreadRng},
-    thread_rng,
-};
+use rand::{rngs::SmallRng, SeedableRng};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // 必ず当てれるときは当てるがそうじゃないときは可能な手からランダムに打つ。
 #[derive(Debug, Clone, PartialEq)]
@@ -28,9 +26,11 @@ where
     }
 }
 
-impl Default for RandomPlayer<ThreadRng> {
+impl Default for RandomPlayer<SmallRng> {
     fn default() -> Self {
-        Self { rng: thread_rng() }
+        Self {
+            rng: SmallRng::seed_from_u64(time_seed()),
+        }
     }
 }
 
@@ -346,8 +346,6 @@ impl Agent for Unfair {
 #[cfg_attr(target_family = "wasm", derive(PartialEq))]
 pub enum Opponent {
     Entoropy(UseEntropyPlayer),
-    #[cfg(target_arch = "x86_64")]
-    RandomThreadRng(RandomPlayer<ThreadRng>),
     RandomSmallRng(RandomPlayer<SmallRng>),
     SearchPlayer(SearchPlayer),
     Unfair(Unfair),
@@ -362,8 +360,6 @@ impl Agent for Opponent {
     ) -> <Self::Game as ImperfectInfoGame>::Move {
         match self {
             Opponent::Entoropy(p) => p.use_info(info, possible_moves),
-            #[cfg(target_arch = "x86_64")]
-            Opponent::RandomThreadRng(p) => p.use_info(info, possible_moves),
             Opponent::RandomSmallRng(p) => p.use_info(info, possible_moves),
             Opponent::SearchPlayer(p) => p.use_info(info, possible_moves),
             Opponent::Unfair(p) => p.use_info(info, possible_moves),
@@ -371,15 +367,21 @@ impl Agent for Opponent {
     }
 }
 
+fn time_seed() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::random;
 
     #[test]
     fn a() {
         let config = default_config();
-        let mut game = config.gen_random(random());
+        let mut game = config.gen_random(12345);
         game.move_game(Move::Query {
             query_to: 1,
             query_sort: "A".into(),

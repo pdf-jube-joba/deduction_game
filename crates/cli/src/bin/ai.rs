@@ -1,7 +1,6 @@
 use cli::{get_json, post_json, JoinResponse, MoveRequest, StateResponse};
 use game_ai::{RandomPlayer, SearchPlayer, Unfair, UseEntropyPlayer};
 use game_core::{abstract_game::Agent, defs::Game};
-use rand::rngs::ThreadRng;
 use std::{thread, time::Duration};
 
 fn main() {
@@ -49,7 +48,7 @@ fn main() {
 
 fn build_agent(strategy: &str) -> Box<dyn Agent<Game = Game>> {
     match strategy {
-        "random" => Box::new(RandomPlayer::<ThreadRng>::default()),
+        "random" => Box::new(RandomPlayer::default()),
         "entropy" => Box::new(UseEntropyPlayer),
         "search" => Box::new(SearchPlayer::new(2)),
         "unfair" => Box::new(Unfair::new(0.7)),

@@ -8,13 +8,12 @@ mod tests {
     use game_core::abstract_game::*;
     use game_core::defs::{Game, GameConfig};
     use game_core::utils::default_config;
-    use rand::random;
 
     fn test_player_with_config(
         config: GameConfig,
         mut players: Vec<Box<dyn Agent<Game = Game>>>,
     ) -> usize {
-        let mut game = GameConfig::gen_random(&config, random());
+        let mut game = GameConfig::gen_random(&config, 12345);
         assert_eq!(players.len(), config.player_num());
         eprintln!("{game:?}");
         let mut i = 0;
