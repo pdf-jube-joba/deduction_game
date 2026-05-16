@@ -6,6 +6,7 @@ members = [
     "crates/game-ai/entropy",
     "crates/game-ai/search",
     "crates/game-ai/unfair",
+    "crates/game-stats",
     "crates/cli",
     "crates/web",
 ]

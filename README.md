@@ -12,6 +12,7 @@
   - game-cli-client : one-shot のコマンドにして HTTP 通信、ゲームを進める。
   - game-cli-ai : 各 AI crate を使って、 HTTP で localhost と通信して行動する。
     - polling (loop 内で sleep して毎回聞きに行く)
+- game-stats : 大量対戦を回して JSONL を出し、 `scripts/` で集計と可視化をする
 - game-web : wasm。game-core + 各 AI crate を同じ wasm に入れてよい
 
 ## その他実装について

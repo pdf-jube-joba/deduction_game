@@ -81,6 +81,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "game-stats"
+version = "0.1.0"
+dependencies = [
+ "game-ai-entropy",
+ "game-ai-random",
+ "game-ai-search",
+ "game-ai-unfair",
+ "game-core",
+ "rand",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "game-web"
 version = "0.1.0"
 dependencies = [
