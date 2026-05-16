@@ -5,3 +5,5 @@
 .repo/*/cache/
 .codex
 .agents
+data.txt
+*.png

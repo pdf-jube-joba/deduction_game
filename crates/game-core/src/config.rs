@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use crate::defs::GameConfig;
 
-pub fn default_config() -> GameConfig {
+pub fn three_small() -> GameConfig {
     GameConfig::new(
         vec!["A", "B", "X", "Y", "Z"]
             .into_iter()

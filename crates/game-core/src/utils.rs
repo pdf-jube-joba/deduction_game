@@ -174,13 +174,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::config::default_config;
+    use crate::config::three_small;
     use crate::abstract_game::ImperfectInfoGame;
 
     use super::*;
     #[test]
     fn test() {
-        let config = default_config();
+        let config = three_small();
         // eprintln!("{config:?}");
         let game = config.gen_random(0);
         // eprintln!("{game:?}");
